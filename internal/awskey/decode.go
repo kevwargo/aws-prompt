@@ -4,16 +4,12 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"fmt"
-	"os"
 )
 
-func Decode(keyID string) (string, error) {
+// the algorithm is from https://hackingthe.cloud/aws/enumeration/get-account-id-from-keys
+func DecodeAccountID(keyID string) (string, error) {
 	b, err := base32.StdEncoding.DecodeString(keyID[4:])
 	if err != nil {
-		return "", err
-	}
-
-	if err = os.WriteFile("key.raw", b, 0644); err != nil {
 		return "", err
 	}
 

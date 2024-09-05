@@ -15,45 +15,31 @@ func InitCommand() *cobra.Command {
 	return &cobra.Command{
 		Use: "init",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tmpl, err := template.New(name).Parse(awspBody)
+			tmpl, err := template.New(awspName).Parse(awspBody)
 			if err != nil {
 				return err
 			}
 
 			return tmpl.Execute(os.Stdout, tmplInput{
-				Cmd:     name,
+				MainCmd: awspName,
 				RootCmd: config.Name,
+				PS1Cmd:  ps1Name,
 			})
 		},
 	}
 }
 
 func MainCommand() *cobra.Command {
-	cmds := []*cobra.Command{
-		{
-			Use: "ps1",
-			Run: func(cmd *cobra.Command, args []string) { fmt.Println("echo ps1") },
-		},
-		{
-			Use:     "use",
-			Aliases: []string{"u"},
-			Run:     func(cmd *cobra.Command, args []string) { fmt.Println("echo use") },
-		},
-		{
-			Use:     "region",
-			Aliases: []string{"r"},
-			Run:     func(cmd *cobra.Command, args []string) { fmt.Println("echo region") },
-		},
-		{
-			Use: "refresh",
-			Run: func(cmd *cobra.Command, args []string) { fmt.Println("echo refresh") },
-		},
-	}
+	stdout := os.Stdout
 
 	cmd := &cobra.Command{
-		Use:           name,
+		Use:           awspName,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// prevent all non-explicit writes to stdout
+			os.Stdout = os.Stderr
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("invalid command %s", strings.Join(args, " "))
 		},
@@ -62,17 +48,18 @@ func MainCommand() *cobra.Command {
 	// prevent cobra from spewing garbage on stdout which would then be interpreted by bash
 	cmd.SetOut(os.Stderr)
 
-	cmd.AddCommand(cmds...)
+	cmd.AddCommand(ps1Command(stdout))
 
 	return cmd
 }
 
 type tmplInput struct {
-	Cmd     string
+	MainCmd string
 	RootCmd string
+	PS1Cmd  string
 }
-
-const name = "awsp"
 
 //go:embed awsp.sh
 var awspBody string
+
+const awspName = "awsp"
