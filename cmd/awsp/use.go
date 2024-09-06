@@ -15,8 +15,9 @@ import (
 
 func useCommand(stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
-		Use:  useName,
-		Args: cobra.ExactArgs(1),
+		Use:     useName,
+		Aliases: []string{"u"},
+		Args:    cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			creds, err := server.GetCreds(args[0])
 			if err != nil {
@@ -30,8 +31,9 @@ func useCommand(stdout io.Writer) *cobra.Command {
 
 func refreshCommand(stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
-		Use:  refreshName,
-		Args: cobra.NoArgs,
+		Use:     refreshName,
+		Aliases: []string{"R"},
+		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			accessKeyID := os.Getenv(awsAccessKeyIDEnvVar)
 			if accessKeyID == "" {
