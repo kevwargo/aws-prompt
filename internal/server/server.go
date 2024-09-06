@@ -46,9 +46,15 @@ func newServer() (Server, error) {
 }
 
 func (s Server) GetCreds(profile string, resp *aws.Credentials) error {
-	if cached, ok := s.profileCreds[profile]; ok && !cached.Expired() {
-		*resp = cached
-		return nil
+	return s.getCreds(profile, resp, true)
+}
+
+func (s Server) getCreds(profile string, resp *aws.Credentials, useCache bool) error {
+	if useCache {
+		if cached, ok := s.profileCreds[profile]; ok && !cached.Expired() {
+			*resp = cached
+			return nil
+		}
 	}
 
 	ctx := context.Background()
@@ -81,4 +87,13 @@ func (s Server) GetCreds(profile string, resp *aws.Credentials) error {
 func (s Server) Status(accessKeyID string, resp *AccessKeyDetails) error {
 	*resp = s.accessKeyDetails[accessKeyID]
 	return nil
+}
+
+func (s Server) Refresh(accessKeyID string, resp *aws.Credentials) error {
+	details, ok := s.accessKeyDetails[accessKeyID]
+	if !ok {
+		return fmt.Errorf("access key %s not recognized", accessKeyID)
+	}
+
+	return s.getCreds(details.Profile, resp, false)
 }

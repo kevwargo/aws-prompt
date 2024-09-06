@@ -43,6 +43,20 @@ func Status(accessKeyID string) (AccessKeyDetails, error) {
 	return details, nil
 }
 
+func Refresh(accessKeyID string) (aws.Credentials, error) {
+	client, err := connect()
+	if err != nil {
+		return aws.Credentials{}, err
+	}
+
+	var creds aws.Credentials
+	if err := client.Call(serverName+".Refresh", accessKeyID, &creds); err != nil {
+		return aws.Credentials{}, err
+	}
+
+	return creds, nil
+}
+
 func connect() (*rpc.Client, error) {
 	client, err := rpc.Dial("unix", SocketPath)
 	if err == nil {
