@@ -22,7 +22,8 @@ type Server struct {
 type AccessKeyDetails struct {
 	AccessKeyID string
 	Profile     string
-	Expires     time.Time
+	Expiration  time.Time
+	CanExpire   bool
 }
 
 func newServer() (Server, error) {
@@ -77,7 +78,8 @@ func (s Server) getCreds(profile string, resp *aws.Credentials, useCache bool) e
 	s.accessKeyDetails[creds.AccessKeyID] = AccessKeyDetails{
 		AccessKeyID: creds.AccessKeyID,
 		Profile:     profile,
-		Expires:     creds.Expires,
+		Expiration:  creds.Expires,
+		CanExpire:   creds.CanExpire,
 	}
 
 	*resp = creds

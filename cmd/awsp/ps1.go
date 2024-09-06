@@ -47,21 +47,36 @@ func describeAccessKey(accessKeyID string) (string, error) {
 		return awskey.DecodeAccountID(accessKeyID)
 	}
 
-	expiresInMinutes := time.Until(status.Expires).Minutes()
-
-	expiry, expiryColor := fmt.Sprintf("%dm", int(expiresInMinutes)), colorGreen
-	if expiresInMinutes < 1 {
-		expiry = "exp"
-		expiryColor = colorBoldRed
-	} else if expiresInMinutes < 10 {
-		expiryColor = colorRed
-	} else if expiresInMinutes < 25 {
-		expiryColor = colorYellow
+	var expiration string
+	if status.CanExpire {
+		expiration = formatExpiration(status.Expiration)
+	} else {
+		expiration = "?"
 	}
 
-	return fmt.Sprintf("{%s%s%s (%s%s%s)}",
-		colorPurple, status.Profile, colorEnd, expiryColor, expiry, colorEnd,
+	return fmt.Sprintf("{%s%s%s (%s)}",
+		colorPurple, status.Profile, colorEnd, expiration,
 	), nil
+}
+
+func formatExpiration(exp time.Time) (text string) {
+	minutes := time.Until(exp).Minutes()
+	color := colorGreen
+
+	if minutes < 1 {
+		color = colorBoldRed
+		text = "exp"
+	} else {
+		text = fmt.Sprintf("%dm", int(minutes))
+
+		if minutes < 10 {
+			color = colorRed
+		} else if minutes < 20 {
+			color = colorYellow
+		}
+	}
+
+	return color + text + colorEnd
 }
 
 //go:embed ps1.sh
