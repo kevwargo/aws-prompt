@@ -1,8 +1,10 @@
 package awsp
 
 import (
+	_ "embed"
 	"fmt"
 	"io"
+	"text/template"
 
 	"github.com/spf13/cobra"
 
@@ -19,10 +21,26 @@ func useCommand(stdout io.Writer) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(stdout, creds.AccessKeyID, creds.Expires)
-			return nil
+			tmpl, err := template.New(useName).Parse(useBody)
+			if err != nil {
+				return err
+			}
+
+			return tmpl.Execute(stdout, map[string]string{
+				awsAccessKeyIDEnvVar:     fmt.Sprintf("%q", creds.AccessKeyID),
+				awsSecretAccessKeyEnvVar: fmt.Sprintf("%q", creds.SecretAccessKey),
+				awsSessionTokenEnvVar:    fmt.Sprintf("%q", creds.SessionToken),
+			})
 		},
 	}
 }
 
-const useName = "use"
+//go:embed use.sh
+var useBody string
+
+const (
+	useName = "use"
+
+	awsSecretAccessKeyEnvVar = "AWS_SECRET_ACCESS_KEY"
+	awsSessionTokenEnvVar    = "AWS_SESSION_TOKEN"
+)

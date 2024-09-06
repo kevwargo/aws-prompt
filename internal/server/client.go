@@ -29,6 +29,20 @@ func GetCreds(profile string) (aws.Credentials, error) {
 	return creds, nil
 }
 
+func Status(accessKeyID string) (AccessKeyDetails, error) {
+	client, err := connect()
+	if err != nil {
+		return AccessKeyDetails{}, err
+	}
+
+	var details AccessKeyDetails
+	if err := client.Call(serverName+".Status", accessKeyID, &details); err != nil {
+		return AccessKeyDetails{}, err
+	}
+
+	return details, nil
+}
+
 func connect() (*rpc.Client, error) {
 	client, err := rpc.Dial("unix", SocketPath)
 	if err == nil {

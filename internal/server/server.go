@@ -22,7 +22,7 @@ type Server struct {
 type AccessKeyDetails struct {
 	AccessKeyID string
 	Profile     string
-	CredsExpire time.Time
+	Expires     time.Time
 }
 
 func newServer() (Server, error) {
@@ -71,9 +71,14 @@ func (s Server) GetCreds(profile string, resp *aws.Credentials) error {
 	s.accessKeyDetails[creds.AccessKeyID] = AccessKeyDetails{
 		AccessKeyID: creds.AccessKeyID,
 		Profile:     profile,
-		CredsExpire: creds.Expires,
+		Expires:     creds.Expires,
 	}
 
 	*resp = creds
+	return nil
+}
+
+func (s Server) Status(accessKeyID string, resp *AccessKeyDetails) error {
+	*resp = s.accessKeyDetails[accessKeyID]
 	return nil
 }
