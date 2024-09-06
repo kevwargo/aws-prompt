@@ -7,6 +7,7 @@ import (
 	"text/template"
 
 	"github.com/spf13/cobra"
+
 	"kevwargo/aws-prompt/internal/awskey"
 )
 

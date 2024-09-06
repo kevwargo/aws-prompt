@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+
 	"kevwargo/aws-prompt/cmd/awsp"
 	"kevwargo/aws-prompt/internal/config"
+	"kevwargo/aws-prompt/internal/server"
 )
 
 func Execute() error {
@@ -13,7 +15,8 @@ func Execute() error {
 		SilenceUsage:  true,
 	}
 
-	cmd.AddCommand(awsp.InitCommand(), awsp.MainCommand())
+	cmd.AddCommand(awsp.InitCmd, awsp.MainCommand())
+	cmd.AddCommand(server.RunCmd)
 
 	return cmd.Execute()
 }
