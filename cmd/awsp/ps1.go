@@ -43,7 +43,7 @@ func describeAccessKey(accessKeyID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if status == (server.AccessKeyDetails{}) {
+	if status == nil {
 		return awskey.DecodeAccountID(accessKeyID)
 	}
 

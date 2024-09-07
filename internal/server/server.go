@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,10 +14,14 @@ import (
 )
 
 type Server struct {
-	profileCreds     map[string]aws.Credentials
-	accessKeyDetails map[string]AccessKeyDetails
-	logFile          *os.File
-	logger           *log.Logger
+	profileCreds   map[string]aws.Credentials
+	profileCredsMu sync.Mutex
+
+	accessKeyDetails   map[string]AccessKeyDetails
+	accessKeyDetailsMu sync.Mutex
+
+	logFile *os.File
+	logger  *log.Logger
 }
 
 type AccessKeyDetails struct {
@@ -26,19 +31,19 @@ type AccessKeyDetails struct {
 	CanExpire   bool
 }
 
-func newServer() (Server, error) {
+func newServer() (*Server, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
-		return Server{}, fmt.Errorf("locating use cache dir: %w", err)
+		return nil, fmt.Errorf("locating use cache dir: %w", err)
 	}
 
 	logFileName := filepath.Join(cacheDir, "aws-prompt-server.log")
 	logFile, err := os.OpenFile(logFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return Server{}, fmt.Errorf("opening log file %q: %w", logFileName, err)
+		return nil, fmt.Errorf("opening log file %q: %w", logFileName, err)
 	}
 
-	return Server{
+	return &Server{
 		profileCreds:     make(map[string]aws.Credentials),
 		accessKeyDetails: make(map[string]AccessKeyDetails),
 		logFile:          logFile,
@@ -46,14 +51,14 @@ func newServer() (Server, error) {
 	}, nil
 }
 
-func (s Server) GetCreds(profile string, resp *aws.Credentials) error {
+func (s *Server) GetCreds(profile string, resp *aws.Credentials) error {
 	return s.getCreds(profile, resp, true)
 }
 
-func (s Server) getCreds(profile string, resp *aws.Credentials, useCache bool) error {
+func (s *Server) getCreds(profile string, resp *aws.Credentials, useCache bool) error {
 	if useCache {
-		if cached, ok := s.profileCreds[profile]; ok && !cached.Expired() {
-			*resp = cached
+		if cached := s.getCachedCreds(profile); cached != nil {
+			*resp = *cached
 			return nil
 		}
 	}
@@ -74,6 +79,11 @@ func (s Server) getCreds(profile string, resp *aws.Credentials, useCache bool) e
 
 	s.logger.Printf("Retrieved %s (expires on %s)", creds.AccessKeyID, creds.Expires)
 
+	s.profileCredsMu.Lock()
+	defer s.profileCredsMu.Unlock()
+	s.accessKeyDetailsMu.Lock()
+	defer s.accessKeyDetailsMu.Unlock()
+
 	s.profileCreds[profile] = creds
 	s.accessKeyDetails[creds.AccessKeyID] = AccessKeyDetails{
 		AccessKeyID: creds.AccessKeyID,
@@ -86,16 +96,44 @@ func (s Server) getCreds(profile string, resp *aws.Credentials, useCache bool) e
 	return nil
 }
 
-func (s Server) Status(accessKeyID string, resp *AccessKeyDetails) error {
-	*resp = s.accessKeyDetails[accessKeyID]
+func (s *Server) getCachedCreds(profile string) *aws.Credentials {
+	s.profileCredsMu.Lock()
+	defer s.profileCredsMu.Unlock()
+
+	if cached, exists := s.profileCreds[profile]; exists {
+		if !cached.Expired() {
+			return &cached
+		}
+		delete(s.profileCreds, profile)
+	}
+
 	return nil
 }
 
-func (s Server) Refresh(accessKeyID string, resp *aws.Credentials) error {
-	details, ok := s.accessKeyDetails[accessKeyID]
-	if !ok {
+func (s *Server) Status(accessKeyID string, resp *AccessKeyDetails) error {
+	if details := s.getKeyDetails(accessKeyID); details != nil {
+		*resp = *details
+	}
+
+	return nil
+}
+
+func (s *Server) Refresh(accessKeyID string, resp *aws.Credentials) error {
+	details := s.getKeyDetails(accessKeyID)
+	if details == nil {
 		return fmt.Errorf("access key %s not recognized", accessKeyID)
 	}
 
 	return s.getCreds(details.Profile, resp, false)
+}
+
+func (s *Server) getKeyDetails(accessKeyID string) *AccessKeyDetails {
+	s.accessKeyDetailsMu.Lock()
+	defer s.accessKeyDetailsMu.Unlock()
+
+	if details, ok := s.accessKeyDetails[accessKeyID]; ok {
+		return &details
+	}
+
+	return nil
 }

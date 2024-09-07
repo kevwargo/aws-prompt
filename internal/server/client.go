@@ -6,14 +6,11 @@ import (
 	"net/rpc"
 	"os"
 	"os/exec"
-	"reflect"
 	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 )
-
-var serverName = reflect.TypeOf((*Server)(nil)).Elem().Name()
 
 func GetCreds(profile string) (aws.Credentials, error) {
 	client, err := connect()
@@ -29,18 +26,22 @@ func GetCreds(profile string) (aws.Credentials, error) {
 	return creds, nil
 }
 
-func Status(accessKeyID string) (AccessKeyDetails, error) {
+func Status(accessKeyID string) (*AccessKeyDetails, error) {
 	client, err := connect()
 	if err != nil {
-		return AccessKeyDetails{}, err
+		return nil, err
 	}
 
 	var details AccessKeyDetails
 	if err := client.Call(serverName+".Status", accessKeyID, &details); err != nil {
-		return AccessKeyDetails{}, err
+		return nil, err
 	}
 
-	return details, nil
+	if details.AccessKeyID != accessKeyID {
+		return nil, nil
+	}
+
+	return &details, nil
 }
 
 func Refresh(accessKeyID string) (aws.Credentials, error) {
@@ -88,13 +89,15 @@ func startServer() error {
 	}
 
 	cmd := exec.Command(rootExec, RunCmd.Use)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("starting %q: %w", cmd.String(), err)
+	}
 
-	return cmd.Start()
+	return nil
 }
 
 func handleConnectError(connErr error) error {
 	if errors.Is(connErr, syscall.ECONNREFUSED) {
-		// The socket file exists but either not bound, or is not a socket
 		s, err := os.Stat(SocketPath)
 		if err != nil {
 			return connErr
