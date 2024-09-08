@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/template"
 	"time"
 
@@ -49,7 +50,7 @@ func describeAccessKey(accessKeyID string) (string, error) {
 
 	var expiration string
 	if status.CanExpire {
-		expiration = formatExpiration(status.Expiration)
+		expiration = formatExpiration(time.Until(status.Expiration))
 	} else {
 		expiration = "?"
 	}
@@ -64,15 +65,15 @@ func describeAccessKey(accessKeyID string) (string, error) {
 	), nil
 }
 
-func formatExpiration(exp time.Time) (text string) {
-	minutes := time.Until(exp).Minutes()
+func formatExpiration(exp time.Duration) (text string) {
+	minutes := exp.Minutes()
 	color := colorGreen
 
 	if minutes < 1 {
 		color = colorBoldRed
 		text = "exp"
 	} else {
-		text = fmt.Sprintf("%dm", int(minutes))
+		text = strings.TrimSuffix(exp.Round(time.Minute).String(), "0s")
 
 		if minutes < 10 {
 			color = colorRed
