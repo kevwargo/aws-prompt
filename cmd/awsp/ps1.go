@@ -54,8 +54,13 @@ func describeAccessKey(accessKeyID string) (string, error) {
 		expiration = "?"
 	}
 
-	return fmt.Sprintf("{%s%s%s (%s)}",
-		colorPurple, status.Profile, colorEnd, expiration,
+	region := os.Getenv(awsRegionEnvVar)
+	if region != "" {
+		region = ":" + shortenRegion(region)
+	}
+
+	return fmt.Sprintf("{%s%s%s%s (%s)}",
+		colorPurple, status.Profile, region, colorEnd, expiration,
 	), nil
 }
 
@@ -86,6 +91,7 @@ const (
 	ps1Name = "ps1"
 
 	awsAccessKeyIDEnvVar = "AWS_ACCESS_KEY_ID"
+	awsRegionEnvVar      = "AWS_DEFAULT_REGION"
 
 	colorPurple  = `\e[38;5;56m`
 	colorGreen   = `\e[32m`
