@@ -2,15 +2,21 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ssooidc"
+	"github.com/aws/smithy-go"
+
+	"kevwargo/aws-prompt/internal/awskey"
 )
 
 type Server struct {
@@ -64,20 +70,20 @@ func (s *Server) getCreds(profile string, resp *aws.Credentials, useCache bool) 
 	}
 
 	ctx := context.Background()
-
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
+	creds, err := s.loadProfileCreds(ctx, profile)
 	if err != nil {
-		return fmt.Errorf("loading config for profile %q: %w", profile, err)
+		creds, err = s.tryRelogin(ctx, err, profile)
+		if err != nil {
+			return err
+		}
 	}
 
-	s.logger.Printf("Loaded the config for %q", profile)
-
-	creds, err := cfg.Credentials.Retrieve(ctx)
+	accountID, err := awskey.DecodeAccountID(creds.AccessKeyID)
 	if err != nil {
-		return fmt.Errorf("retrieving creds for profile %q: %w", profile, err)
+		accountID = fmt.Sprintf("%s(decodeErr:%s)", creds.AccessKeyID, err.Error())
 	}
 
-	s.logger.Printf("Retrieved %s (expires on %s)", creds.AccessKeyID, creds.Expires)
+	s.logger.Printf("Retrieved creds for %s (expire on %s)", accountID, creds.Expires)
 
 	s.profileCredsMu.Lock()
 	defer s.profileCredsMu.Unlock()
@@ -94,6 +100,40 @@ func (s *Server) getCreds(profile string, resp *aws.Credentials, useCache bool) 
 
 	*resp = creds
 	return nil
+}
+
+func (s *Server) loadProfileCreds(ctx context.Context, profile string) (aws.Credentials, error) {
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
+	if err != nil {
+		return aws.Credentials{}, fmt.Errorf("loading config for profile %q: %w", profile, err)
+	}
+
+	s.logger.Printf("Loaded the config for %q", profile)
+
+	creds, err := cfg.Credentials.Retrieve(ctx)
+	if err != nil {
+		return aws.Credentials{}, fmt.Errorf("retrieving creds for profile %q: %w", profile, err)
+	}
+
+	return creds, nil
+}
+
+func (s *Server) tryRelogin(ctx context.Context, err error, profile string) (aws.Credentials, error) {
+	var opErr *smithy.OperationError
+	if !errors.As(err, &opErr) || opErr.Operation() != "CreateToken" || opErr.Service() != ssooidc.ServiceID {
+		return aws.Credentials{}, err
+	}
+
+	s.logger.Printf("SSO token refresh failed for %q, attempting re-login ...", profile)
+
+	cmd := exec.Command("aws", "sso", "login", "--profile", profile)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return aws.Credentials{}, err
+	}
+
+	return s.loadProfileCreds(ctx, profile)
 }
 
 func (s *Server) getCachedCreds(profile string) *aws.Credentials {
