@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/ssooidc"
 	"github.com/aws/smithy-go"
 
@@ -102,7 +104,12 @@ func (s *Server) getCreds(profile string, resp *aws.Credentials, useCache bool) 
 }
 
 func (s *Server) loadProfileCreds(ctx context.Context, profile string) (aws.Credentials, error) {
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithSharedConfigProfile(profile),
+		config.WithAssumeRoleCredentialOptions(func(o *stscreds.AssumeRoleOptions) {
+			o.TokenProvider = createMFAProvider(o, profile)
+		}),
+	)
 	if err != nil {
 		return aws.Credentials{}, fmt.Errorf("loading config for profile %q: %w", profile, err)
 	}
@@ -117,9 +124,55 @@ func (s *Server) loadProfileCreds(ctx context.Context, profile string) (aws.Cred
 	return creds, nil
 }
 
+func createMFAProvider(o *stscreds.AssumeRoleOptions, profile string) func() (string, error) {
+	var createPromptCmd func(string) *exec.Cmd
+
+	if _, err := exec.LookPath(kdialogCmd); err == nil {
+		createPromptCmd = createKDialogPrompt
+	} else if _, err := exec.LookPath(ksshaskpassCmd); err == nil {
+		createPromptCmd = createKSSHAskPassPrompt
+	} else {
+		return func() (string, error) {
+			return "", fmt.Errorf("Cannot interactively ask for MFA code, since neither %q nor %q are installed", kdialogCmd, ksshaskpassCmd)
+		}
+	}
+
+	promptParts := []string{fmt.Sprintf("profile:%s", profile)}
+	if o.RoleARN != "" {
+		promptParts = append(promptParts, fmt.Sprintf("roleArn:%s", o.RoleARN))
+	}
+	if o.SerialNumber != nil {
+		promptParts = append(promptParts, fmt.Sprintf("serial:%s", *o.SerialNumber))
+	}
+
+	cmd := createPromptCmd(fmt.Sprintf("Provide MFA one time code for (%s): ", strings.Join(promptParts, ", ")))
+
+	return func() (string, error) {
+		resp, err := cmd.Output()
+		if err != nil {
+			err = fmt.Errorf("executing %q: %w", cmd.String(), err)
+			if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && len(ee.Stderr) > 0 {
+				err = fmt.Errorf("%w: %s", err, string(ee.Stderr))
+			}
+
+			return "", err
+		}
+
+		return strings.TrimSpace(string(resp)), nil
+	}
+}
+
+func createKDialogPrompt(prompt string) *exec.Cmd {
+	return exec.Command(kdialogCmd, "--title", "MFA", "--inputbox", prompt)
+}
+
+func createKSSHAskPassPrompt(prompt string) *exec.Cmd {
+	return exec.Command(ksshaskpassCmd, prompt)
+}
+
 func (s *Server) tryRelogin(ctx context.Context, err error, profile string) (aws.Credentials, error) {
 	var opErr *smithy.OperationError
-	if !errors.As(err, &opErr) || opErr.Operation() != "CreateToken" || opErr.Service() != ssooidc.ServiceID {
+	if !errors.As(err, &opErr) || opErr.Operation() != ssooidcCreateTokenOp || opErr.Service() != ssooidc.ServiceID {
 		return aws.Credentials{}, err
 	}
 
@@ -176,3 +229,10 @@ func (s *Server) getKeyDetails(accessKeyID string) *AccessKeyDetails {
 
 	return nil
 }
+
+const (
+	ssooidcCreateTokenOp = "CreateToken"
+
+	kdialogCmd     = "kdialog"
+	ksshaskpassCmd = "ksshaskpass"
+)
