@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/rpc"
 	"os"
 	"os/exec"
@@ -59,7 +60,7 @@ func Refresh(accessKeyID string) (aws.Credentials, error) {
 }
 
 func connect() (*rpc.Client, error) {
-	client, err := rpc.Dial("unix", SocketPath)
+	client, err := rpc.Dial("unix", socketPath)
 	if err == nil {
 		return client, nil
 	}
@@ -73,7 +74,7 @@ func connect() (*rpc.Client, error) {
 	}
 
 	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
-		client, err = rpc.Dial("unix", SocketPath)
+		client, err = rpc.Dial("unix", socketPath)
 		if err == nil {
 			break
 		}
@@ -88,26 +89,36 @@ func startServer() error {
 		rootExec = os.Args[0]
 	}
 
+	lf, err := os.OpenFile(logFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("opening log file %s: %w", logFile, err)
+	}
+
 	cmd := exec.Command(rootExec, RunCmd.Use)
+	cmd.Stdout = lf
+	cmd.Stderr = lf
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("starting %q: %w", cmd.String(), err)
 	}
+
+	log.Printf("started server %d in the background (caller pid:%d pgrp:%s)", cmd.Process.Pid, os.Getpid(), getPgrp())
 
 	return nil
 }
 
 func handleConnectError(connErr error) error {
 	if errors.Is(connErr, syscall.ECONNREFUSED) {
-		s, err := os.Stat(SocketPath)
+		s, err := os.Stat(socketPath)
 		if err != nil {
 			return connErr
 		}
 
 		if s.Mode().Type()&os.ModeSocket == 0 {
-			return fmt.Errorf("%w: %s is not a socket", connErr, SocketPath)
+			return fmt.Errorf("%w: %s is not a socket", connErr, socketPath)
 		}
 
-		if err := os.Remove(SocketPath); err != nil {
+		if err := os.Remove(socketPath); err != nil {
 			return connErr
 		}
 

@@ -19,15 +19,27 @@ import (
 	"kevwargo/aws-prompt/internal/awskey"
 )
 
+var (
+	socketPath string
+	logFile    string
+)
+
+func init() {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		log.Fatalf("unable to locate user cache dir: %s", err.Error())
+	}
+
+	socketPath = filepath.Join(cacheDir, "aws-prompt-server.sock")
+	logFile = filepath.Join(cacheDir, "aws-prompt-server.log")
+}
+
 type Server struct {
 	profileCreds   map[string]aws.Credentials
 	profileCredsMu sync.Mutex
 
 	accessKeyDetails   map[string]AccessKeyDetails
 	accessKeyDetailsMu sync.Mutex
-
-	logFile *os.File
-	logger  *log.Logger
 }
 
 type AccessKeyDetails struct {
@@ -37,24 +49,11 @@ type AccessKeyDetails struct {
 	CanExpire   bool
 }
 
-func newServer() (*Server, error) {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		return nil, fmt.Errorf("locating use cache dir: %w", err)
-	}
-
-	logFileName := filepath.Join(cacheDir, "aws-prompt-server.log")
-	logFile, err := os.OpenFile(logFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("opening log file %q: %w", logFileName, err)
-	}
-
+func newServer() *Server {
 	return &Server{
 		profileCreds:     make(map[string]aws.Credentials),
 		accessKeyDetails: make(map[string]AccessKeyDetails),
-		logFile:          logFile,
-		logger:           log.New(logFile, "| ", log.LstdFlags|log.Lmsgprefix),
-	}, nil
+	}
 }
 
 func (s *Server) GetCreds(profile string, resp *aws.Credentials) error {
@@ -83,7 +82,7 @@ func (s *Server) getCreds(profile string, resp *aws.Credentials, useCache bool) 
 		accountID = fmt.Sprintf("%s(decodeErr:%s)", creds.AccessKeyID, err.Error())
 	}
 
-	s.logger.Printf("Retrieved creds for %s (expire on %s)", accountID, creds.Expires)
+	log.Printf("Retrieved creds for %s (expire on %s)", accountID, creds.Expires)
 
 	s.profileCredsMu.Lock()
 	defer s.profileCredsMu.Unlock()
@@ -108,7 +107,7 @@ func (s *Server) loadProfileCreds(ctx context.Context, profile string) (aws.Cred
 		return aws.Credentials{}, fmt.Errorf("loading config for profile %q: %w", profile, err)
 	}
 
-	s.logger.Printf("Loaded the config for %q", profile)
+	log.Printf("Loaded the config for %q", profile)
 
 	creds, err := cfg.Credentials.Retrieve(ctx)
 	if err != nil {
@@ -124,7 +123,7 @@ func (s *Server) tryRelogin(ctx context.Context, err error, profile string) (aws
 		return aws.Credentials{}, err
 	}
 
-	s.logger.Printf("SSO token refresh failed for %q, attempting re-login ...", profile)
+	log.Printf("SSO token refresh failed for %q, attempting re-login ...", profile)
 
 	cmd := exec.Command("aws", "sso", "login", "--profile", profile)
 	cmd.Stdout = os.Stdout

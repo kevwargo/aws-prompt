@@ -7,13 +7,11 @@ import (
 	"net/rpc"
 	"os"
 	"os/signal"
-	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/spf13/cobra"
 )
-
-var SocketPath string
 
 const serverName = "awsp"
 
@@ -26,46 +24,44 @@ var RunCmd = &cobra.Command{
 }
 
 func run() error {
-	srv, err := newServer()
-	if err != nil {
-		return err
-	}
+	srv := newServer()
+
+	log.Printf("running server %d with pgrp %s", os.Getpid(), getPgrp())
+	pgid, err := syscall.Setsid()
+	log.Printf("setsid() = (%d, %v) pgrp:%s", pgid, err, getPgrp())
 
 	if err := rpc.RegisterName(serverName, srv); err != nil {
 		return fmt.Errorf("registering rpc: %w", err)
 	}
 
-	listener, err := net.Listen("unix", SocketPath)
+	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
-		return fmt.Errorf("listening on %s: %w", SocketPath, err)
+		return fmt.Errorf("listening on %s: %w", socketPath, err)
 	}
-	go handleSignals(srv, listener)
+	go handleSignals(listener)
 
-	srv.logger.Printf("Accepting connections on %s ...", SocketPath)
+	log.Printf("Accepting connections on %s ...", socketPath)
 	rpc.Accept(listener)
 
 	return nil
 }
 
-func init() {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		log.Fatalf("unable to locate user cache dir: %s", err.Error())
+func getPgrp() string {
+	if pgid, err := syscall.Getpgid(0); err == nil {
+		return strconv.Itoa(pgid)
+	} else {
+		return err.Error()
 	}
-
-	SocketPath = filepath.Join(cacheDir, "aws-prompt-server.sock")
 }
 
-func handleSignals(srv *Server, listener net.Listener) {
+func handleSignals(listener net.Listener) {
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	s := <-c
 
-	srv.logger.Printf("Caught the %s signal, closing server", s.String())
-	srv.logFile.Close()
+	log.Printf("Caught the %q signal, closing server", s.String())
 
 	listener.Close()
-
 	os.Exit(0)
 }
