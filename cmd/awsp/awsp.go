@@ -50,6 +50,7 @@ func MainCommand() *cobra.Command {
 	cmd.AddCommand(ps1Command(stdout))
 	cmd.AddCommand(useCommand(stdout))
 	cmd.AddCommand(refreshCommand(stdout))
+	cmd.AddCommand(resetCommand(stdout))
 
 	return cmd
 }

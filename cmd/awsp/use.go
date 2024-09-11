@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"text/template"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/spf13/cobra"
@@ -32,7 +31,7 @@ func useCommand(stdout io.Writer) *cobra.Command {
 func refreshCommand(stdout io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:     refreshName,
-		Aliases: []string{"R"},
+		Aliases: []string{"f"},
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			accessKeyID := os.Getenv(awsAccessKeyIDEnvVar)
@@ -50,25 +49,55 @@ func refreshCommand(stdout io.Writer) *cobra.Command {
 	}
 }
 
-func dumpCreds(creds aws.Credentials, stdout io.Writer) error {
-	tmpl, err := template.New(useName).Parse(useBody)
-	if err != nil {
-		return err
-	}
+func resetCommand(stdout io.Writer) *cobra.Command {
+	return &cobra.Command{
+		Use:     resetName,
+		Aliases: []string{"x"},
+		Args:    cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			for name := range mapCredEnvs(nil) {
+				_, err := fmt.Fprintf(stdout, "unset %s;\n", name)
+				if err != nil {
+					return err
+				}
+			}
 
-	return tmpl.Execute(stdout, map[string]string{
-		awsAccessKeyIDEnvVar:     fmt.Sprintf("%q", creds.AccessKeyID),
-		awsSecretAccessKeyEnvVar: fmt.Sprintf("%q", creds.SecretAccessKey),
-		awsSessionTokenEnvVar:    fmt.Sprintf("%q", creds.SessionToken),
-	})
+			return nil
+		},
+	}
 }
 
-//go:embed use.sh
-var useBody string
+func dumpCreds(creds aws.Credentials, stdout io.Writer) error {
+	for name, value := range mapCredEnvs(&creds) {
+		_, err := fmt.Fprintf(stdout, "export %s=%q;\n", name, value)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mapCredEnvs(creds *aws.Credentials) map[string]string {
+	if creds == nil {
+		return map[string]string{
+			awsAccessKeyIDEnvVar:     "",
+			awsSecretAccessKeyEnvVar: "",
+			awsSessionTokenEnvVar:    "",
+		}
+	}
+
+	return map[string]string{
+		awsAccessKeyIDEnvVar:     creds.AccessKeyID,
+		awsSecretAccessKeyEnvVar: creds.SecretAccessKey,
+		awsSessionTokenEnvVar:    creds.SessionToken,
+	}
+}
 
 const (
 	useName     = "use"
 	refreshName = "refresh"
+	resetName   = "reset"
 
 	awsSecretAccessKeyEnvVar = "AWS_SECRET_ACCESS_KEY"
 	awsSessionTokenEnvVar    = "AWS_SESSION_TOKEN"
