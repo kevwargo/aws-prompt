@@ -44,25 +44,27 @@ func describeAccessKey(accessKeyID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	var label string
+	expiration := "?"
+
 	if status == nil {
-		return awskey.DecodeAccountID(accessKeyID)
-	}
-
-	var expiration string
-	if status.CanExpire {
-		expiration = formatExpiration(time.Until(status.Expiration))
+		label, err = awskey.DecodeAccountID(accessKeyID)
+		if err != nil {
+			return "", err
+		}
 	} else {
-		expiration = "?"
+		label = status.Profile
+		if status.CanExpire {
+			expiration = formatExpiration(time.Until(status.Expiration))
+		}
 	}
 
-	region := os.Getenv(awsRegionEnvVar)
-	if region != "" {
-		region = ":" + shortenRegion(region)
+	if region := os.Getenv(awsRegionEnvVar); region != "" {
+		label += ":" + shortenRegion(region)
 	}
 
-	return fmt.Sprintf("{%s%s%s%s (%s)}",
-		colorPurple, status.Profile, region, colorEnd, expiration,
-	), nil
+	return fmt.Sprintf("{%s (%s)}", colorize(label, colorPurple), expiration), nil
 }
 
 func formatExpiration(exp time.Duration) (text string) {
@@ -82,7 +84,11 @@ func formatExpiration(exp time.Duration) (text string) {
 		}
 	}
 
-	return color + text + colorEnd
+	return colorize(text, color)
+}
+
+func colorize(text, color string) string {
+	return fmt.Sprintf(`\[\e[%sm\]%s\[\e[0m\]`, color, text)
 }
 
 //go:embed ps1.sh
@@ -94,10 +100,9 @@ const (
 	awsAccessKeyIDEnvVar = "AWS_ACCESS_KEY_ID"
 	awsRegionEnvVar      = "AWS_DEFAULT_REGION"
 
-	colorPurple  = `\e[38;5;56m`
-	colorGreen   = `\e[32m`
-	colorYellow  = `\e[33m`
-	colorRed     = `\e[31m`
-	colorBoldRed = `\e[1;31m`
-	colorEnd     = `\e[0m`
+	colorPurple  = "38;5;56"
+	colorGreen   = "32"
+	colorYellow  = "33"
+	colorRed     = "31"
+	colorBoldRed = "1;31"
 )
