@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/spf13/cobra"
 
-	"kevwargo/aws-prompt/internal/server"
+	"kevwargo/aws-prompt/internal/creds"
 )
 
 func useCommand(stdout io.Writer) *cobra.Command {
@@ -18,12 +18,12 @@ func useCommand(stdout io.Writer) *cobra.Command {
 		Aliases: []string{"u"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			creds, err := server.GetCreds(args[0])
+			c, err := creds.Get(args[0])
 			if err != nil {
 				return err
 			}
 
-			return dumpCreds(creds, stdout)
+			return dumpCreds(c, stdout)
 		},
 	}
 }
@@ -39,12 +39,12 @@ func refreshCommand(stdout io.Writer) *cobra.Command {
 				return nil
 			}
 
-			creds, err := server.Refresh(accessKeyID)
+			c, err := creds.Refresh(accessKeyID)
 			if err != nil {
 				return err
 			}
 
-			return dumpCreds(creds, stdout)
+			return dumpCreds(c, stdout)
 		},
 	}
 }
@@ -80,11 +80,7 @@ func dumpCreds(creds aws.Credentials, stdout io.Writer) error {
 
 func mapCredEnvs(creds *aws.Credentials) map[string]string {
 	if creds == nil {
-		return map[string]string{
-			awsAccessKeyIDEnvVar:     "",
-			awsSecretAccessKeyEnvVar: "",
-			awsSessionTokenEnvVar:    "",
-		}
+		return emptyCredsMap
 	}
 
 	return map[string]string{
@@ -98,7 +94,10 @@ const (
 	useName     = "use"
 	refreshName = "refresh"
 	resetName   = "reset"
-
-	awsSecretAccessKeyEnvVar = "AWS_SECRET_ACCESS_KEY"
-	awsSessionTokenEnvVar    = "AWS_SESSION_TOKEN"
 )
+
+var emptyCredsMap = map[string]string{
+	awsAccessKeyIDEnvVar:     "",
+	awsSecretAccessKeyEnvVar: "",
+	awsSessionTokenEnvVar:    "",
+}

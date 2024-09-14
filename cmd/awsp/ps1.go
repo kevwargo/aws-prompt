@@ -11,8 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"kevwargo/aws-prompt/internal/awskey"
-	"kevwargo/aws-prompt/internal/server"
+	"kevwargo/aws-prompt/internal/creds"
 )
 
 func ps1Command(stdout io.Writer) *cobra.Command {
@@ -24,50 +23,41 @@ func ps1Command(stdout io.Writer) *cobra.Command {
 				return err
 			}
 
-			accessKeyID := os.Getenv(awsAccessKeyIDEnvVar)
-			if accessKeyID == "" {
-				return nil
+			data, err := describeActiveCreds()
+			if data != "" {
+				return tmpl.Execute(stdout, data)
 			}
 
-			data, err := describeAccessKey(accessKeyID)
-			if err != nil {
-				return err
-			}
-
-			return tmpl.Execute(stdout, data)
+			return err
 		},
 	}
 }
 
-func describeAccessKey(accessKeyID string) (string, error) {
-	status, err := server.Status(accessKeyID)
+func describeActiveCreds() (string, error) {
+	accessKeyID := os.Getenv(awsAccessKeyIDEnvVar)
+	if accessKeyID == "" {
+		return "", nil
+	}
+
+	info, err := creds.Describe(accessKeyID)
 	if err != nil {
 		return "", err
 	}
 
-	var label string
-	expiration := "?"
-
-	if status == nil {
-		label, err = awskey.DecodeAccountID(accessKeyID)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		label = status.Profile
-		if status.CanExpire {
-			expiration = formatExpiration(time.Until(status.Expiration))
-		}
-	}
-
+	label := info.Profile
 	if region := os.Getenv(awsRegionEnvVar); region != "" {
 		label += ":" + shortenRegion(region)
 	}
 
-	return fmt.Sprintf("{%s (%s)}", colorize(label, colorPurple), expiration), nil
+	return fmt.Sprintf("{%s (%s)}", colorize(label, colorPurple), formatExpiration(info.Expiration)), nil
 }
 
-func formatExpiration(exp time.Duration) (text string) {
+func formatExpiration(expTime *time.Time) (text string) {
+	if expTime == nil {
+		return "?"
+	}
+
+	exp := time.Until(*expTime)
 	minutes := exp.Minutes()
 	color := colorGreen
 
@@ -96,9 +86,6 @@ var ps1Body string
 
 const (
 	ps1Name = "ps1"
-
-	awsAccessKeyIDEnvVar = "AWS_ACCESS_KEY_ID"
-	awsRegionEnvVar      = "AWS_DEFAULT_REGION"
 
 	colorPurple  = "38;5;56"
 	colorGreen   = "32"

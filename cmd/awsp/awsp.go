@@ -29,28 +29,24 @@ var InitCmd = &cobra.Command{
 }
 
 func MainCommand() *cobra.Command {
-	stdout := os.Stdout
-
 	cmd := &cobra.Command{
 		Use:           awspName,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			// prevent all non-explicit writes to stdout
-			os.Stdout = os.Stderr
-		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("invalid command %s", strings.Join(args, " "))
 		},
 	}
 
-	// prevent cobra from spewing garbage on stdout which would then be interpreted by bash
+	// we need to prevent any unwanted output from being written into stdout
+	// because stdout is interpreted (sourced) as-is by bash
 	cmd.SetOut(os.Stderr)
+	cmd.PersistentPreRun = func(_ *cobra.Command, _ []string) { os.Stdout = os.Stderr }
 
-	cmd.AddCommand(ps1Command(stdout))
-	cmd.AddCommand(useCommand(stdout))
-	cmd.AddCommand(refreshCommand(stdout))
-	cmd.AddCommand(resetCommand(stdout))
+	cmd.AddCommand(ps1Command(os.Stdout))
+	cmd.AddCommand(useCommand(os.Stdout))
+	cmd.AddCommand(refreshCommand(os.Stdout))
+	cmd.AddCommand(resetCommand(os.Stdout))
 
 	return cmd
 }
@@ -64,4 +60,11 @@ type tmplInput struct {
 //go:embed awsp.sh
 var awspBody string
 
-const awspName = "awsp"
+const (
+	awspName = "awsp"
+
+	awsRegionEnvVar          = "AWS_DEFAULT_REGION"
+	awsAccessKeyIDEnvVar     = "AWS_ACCESS_KEY_ID"
+	awsSecretAccessKeyEnvVar = "AWS_SECRET_ACCESS_KEY"
+	awsSessionTokenEnvVar    = "AWS_SESSION_TOKEN"
+)

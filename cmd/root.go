@@ -5,7 +5,7 @@ import (
 
 	"kevwargo/aws-prompt/cmd/awsp"
 	"kevwargo/aws-prompt/internal/config"
-	"kevwargo/aws-prompt/internal/server"
+	"kevwargo/aws-prompt/internal/creds/cache"
 )
 
 func Execute() error {
@@ -16,7 +16,7 @@ func Execute() error {
 	}
 
 	cmd.AddCommand(awsp.InitCmd, awsp.MainCommand())
-	cmd.AddCommand(server.RunCmd)
+	cmd.AddCommand(cache.RunServerCmd)
 
 	return cmd.Execute()
 }
