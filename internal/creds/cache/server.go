@@ -1,16 +1,19 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"net/rpc"
 	"os"
 	"os/signal"
+	"regexp"
 	"sync"
 	"syscall"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/internal/awskey"
@@ -22,7 +25,7 @@ var RunServerCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, _ []string) error {
 		srv := server{
 			profileCreds:  make(map[string]aws.Credentials),
-			accessKeyInfo: make(map[string]awskey.Info),
+			accessKeyInfo: make(map[string]*awskey.Info),
 		}
 
 		return srv.run()
@@ -33,7 +36,7 @@ type server struct {
 	profileCreds      map[string]aws.Credentials
 	profileCredsMutex sync.Mutex
 
-	accessKeyInfo      map[string]awskey.Info
+	accessKeyInfo      map[string]*awskey.Info
 	accessKeyInfoMutex sync.Mutex
 }
 
@@ -47,6 +50,7 @@ func (s *server) Get(profile string, resp *GetResp) error {
 			return nil
 		}
 
+		log.Printf("Removing creds for %q expired on %s", profile, creds.Expires)
 		delete(s.profileCreds, profile)
 	}
 
@@ -55,35 +59,108 @@ func (s *server) Get(profile string, resp *GetResp) error {
 }
 
 func (s *server) Store(req StoreRequest, resp *struct{}) error {
+	if err := s.storeAccessKey(req); err != nil {
+		return err
+	}
+	if req.Profile != nil {
+		s.storeProfile(*req.Profile, req.Creds)
+	}
+
+	return nil
+}
+
+func (s *server) storeProfile(profile string, creds aws.Credentials) {
 	s.profileCredsMutex.Lock()
 	defer s.profileCredsMutex.Unlock()
+
+	s.profileCreds[profile] = creds
+}
+
+func (s *server) storeAccessKey(req StoreRequest) error {
 	s.accessKeyInfoMutex.Lock()
 	defer s.accessKeyInfoMutex.Unlock()
 
-	s.profileCreds[req.Profile] = req.Creds
-
-	keyInfo := awskey.Info{Profile: req.Profile}
-	if req.Creds.CanExpire {
-		keyInfo.Expiration = &req.Creds.Expires
+	accountID, err := awskey.DecodeAccountID(req.Creds.AccessKeyID)
+	if err != nil {
+		return err
 	}
-	s.accessKeyInfo[req.Creds.AccessKeyID] = keyInfo
+
+	info := &awskey.Info{
+		AccountID: accountID,
+		Profile:   req.Profile,
+	}
+	if req.Creds.CanExpire {
+		info.Expiration = &req.Creds.Expires
+	}
+	s.accessKeyInfo[req.Creds.AccessKeyID] = info
+
+	identity := fmt.Sprintf("account %s", accountID)
+	if req.Profile != nil {
+		identity = fmt.Sprintf("profile %q", *req.Profile)
+	}
+
+	var expiration string
+	if req.Creds.CanExpire {
+		expiration = fmt.Sprintf(" (expiring on %s)", req.Creds.Expires)
+	}
+
+	log.Printf("Stored creds for %s%s", identity, expiration)
+
+	go s.storeAssumedRole(req)
 
 	return nil
+}
+
+func (s *server) storeAssumedRole(req StoreRequest) {
+	credsFn := func(_ context.Context) (aws.Credentials, error) {
+		return req.Creds, nil
+	}
+	stsOpts := sts.Options{
+		Credentials: aws.CredentialsProviderFunc(credsFn),
+		Region:      req.Region,
+	}
+	ctx := context.Background()
+
+	resp, err := sts.New(stsOpts).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		log.Printf("getting caller identity for %s: %s", req.Creds.AccessKeyID, err.Error())
+		return
+	}
+
+	m := assumedRoleRegex.FindStringSubmatch(*resp.Arn)
+	if m == nil {
+		return
+	}
+
+	s.accessKeyInfoMutex.Lock()
+	defer s.accessKeyInfoMutex.Unlock()
+
+	if info := s.accessKeyInfo[req.Creds.AccessKeyID]; info != nil {
+		assumedRole := fmt.Sprintf("%s/%s", m[1], m[2])
+		info.AssumedRole = &assumedRole
+
+		var profile string
+		if req.Profile != nil {
+			profile = fmt.Sprintf(" for profile %q", *req.Profile)
+		}
+
+		log.Printf("Stored AssumedRole %q%s", assumedRole, profile)
+	}
 }
 
 func (s *server) Info(accessKeyID string, resp *awskey.Info) error {
 	s.accessKeyInfoMutex.Lock()
 	defer s.accessKeyInfoMutex.Unlock()
 
-	if info, ok := s.accessKeyInfo[accessKeyID]; ok {
-		*resp = info
+	if info := s.accessKeyInfo[accessKeyID]; info != nil {
+		*resp = *info
 	} else {
 		accountID, err := awskey.DecodeAccountID(accessKeyID)
 		if err != nil {
 			return err
 		}
 
-		*resp = awskey.Info{Profile: accountID}
+		*resp = awskey.Info{AccountID: accountID}
 	}
 
 	return nil
@@ -121,3 +198,5 @@ func handleSignals(listener net.Listener) {
 }
 
 const serverName = "awsp"
+
+var assumedRoleRegex = regexp.MustCompile("arn:aws:sts::([0-9]{12}):assumed-role/([^/]+)(/.*)?")

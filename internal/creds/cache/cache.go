@@ -27,7 +27,7 @@ func init() {
 
 type Cache interface {
 	Get(profile string) (*aws.Credentials, error)
-	Store(profile string, creds aws.Credentials) error
+	Store(req StoreRequest) error
 	Info(accessKeyID string) (awskey.Info, error)
 	Close()
 }
@@ -46,6 +46,7 @@ type GetResp struct {
 }
 
 type StoreRequest struct {
-	Profile string
+	Profile *string
 	Creds   aws.Credentials
+	Region  string
 }

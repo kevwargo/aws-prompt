@@ -44,7 +44,11 @@ func describeActiveCreds() (string, error) {
 		return "", err
 	}
 
-	label := info.Profile
+	label := info.AccountID
+	if info.Profile != nil {
+		label = *info.Profile
+	}
+
 	if region := os.Getenv(awsRegionEnvVar); region != "" {
 		label += ":" + shortenRegion(region)
 	}

@@ -1,8 +1,12 @@
 package awskey
 
-import "time"
+import (
+	"time"
+)
 
 type Info struct {
-	Profile    string
-	Expiration *time.Time
+	AccountID   string
+	Profile     *string
+	AssumedRole *string
+	Expiration  *time.Time
 }

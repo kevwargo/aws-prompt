@@ -28,11 +28,8 @@ func (c *client) Get(profile string) (*aws.Credentials, error) {
 	return resp.Creds, nil
 }
 
-func (c *client) Store(profile string, creds aws.Credentials) error {
-	var (
-		req  StoreRequest = StoreRequest{Profile: profile, Creds: creds}
-		resp struct{}
-	)
+func (c *client) Store(req StoreRequest) error {
+	var resp struct{}
 
 	return c.c.Call(serverName+".Store", req, &resp)
 }
