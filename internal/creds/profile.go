@@ -1,0 +1,114 @@
+package creds
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/service/ssooidc"
+	"github.com/aws/smithy-go"
+
+	"kevwargo/aws-prompt/internal/creds/cache"
+)
+
+func resolveProfile(profile string, c cache.Cache) (aws.Credentials, error) {
+	ctx := context.Background()
+
+	creds, region, err := loadProfileCreds(ctx, profile)
+	if err != nil {
+		if err := tryRelogin(err, profile); err != nil {
+			return aws.Credentials{}, err
+		}
+
+		creds, region, err = loadProfileCreds(ctx, profile)
+		if err != nil {
+			return aws.Credentials{}, err
+		}
+	}
+
+	log.Printf("Loaded the config for %q:%s", profile, region)
+
+	req := cache.StoreRequest{
+		Profile: &profile,
+		Creds:   creds,
+		Region:  region,
+	}
+	if err := c.Store(req); err != nil {
+		return aws.Credentials{}, err
+	}
+
+	return creds, nil
+}
+
+func loadProfileCreds(ctx context.Context, profile string) (aws.Credentials, string, error) {
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithSharedConfigProfile(profile),
+		config.WithAssumeRoleCredentialOptions(func(o *stscreds.AssumeRoleOptions) {
+			o.TokenProvider = createMFAProvider(o, profile)
+		}),
+	)
+	if err != nil {
+		return aws.Credentials{}, "", fmt.Errorf("loading config for profile %q: %w", profile, err)
+	}
+
+	creds, err := cfg.Credentials.Retrieve(ctx)
+	if err != nil {
+		return aws.Credentials{}, "", fmt.Errorf("retrieving creds for profile %q: %w", profile, err)
+	}
+
+	return creds, cfg.Region, nil
+}
+
+func tryRelogin(err error, profile string) error {
+	var opErr *smithy.OperationError
+	if !errors.As(err, &opErr) || opErr.Operation() != ssooidcCreateTokenOp || opErr.Service() != ssooidc.ServiceID {
+		return err
+	}
+
+	log.Printf("SSO token refresh failed for %q, attempting re-login ...", profile)
+
+	cmd := exec.Command("aws", "sso", "login", "--profile", profile)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+func createMFAProvider(o *stscreds.AssumeRoleOptions, profile string) func() (string, error) {
+	promptParts := []string{fmt.Sprintf("profile:%q", profile)}
+	if o.RoleARN != "" {
+		promptParts = append(promptParts, fmt.Sprintf("roleArn:%q", o.RoleARN))
+	}
+	if o.SerialNumber != nil {
+		promptParts = append(promptParts, fmt.Sprintf("serial:%q", *o.SerialNumber))
+	}
+
+	prompt := fmt.Sprintf("Provide MFA one time code for (%s): ", strings.Join(promptParts, ", "))
+
+	return func() (string, error) {
+		_, err := fmt.Print(prompt)
+		if err != nil {
+			return "", err
+		}
+
+		reader := bufio.NewReader(os.Stdin)
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+
+		return strings.TrimSpace(line), nil
+	}
+}
+
+const (
+	ssooidcCreateTokenOp = "CreateToken"
+)

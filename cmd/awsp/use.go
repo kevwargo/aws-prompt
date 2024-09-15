@@ -67,6 +67,22 @@ func resetCommand(stdout io.Writer) *cobra.Command {
 	}
 }
 
+func processCommand(stdout io.Writer) *cobra.Command {
+	return &cobra.Command{
+		Use:     processName,
+		Aliases: []string{"p"},
+		Args:    cobra.MinimumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := creds.ResolveProcess(args[0], args[1:])
+			if err != nil {
+				return err
+			}
+
+			return dumpCreds(c, stdout)
+		},
+	}
+}
+
 func dumpCreds(creds aws.Credentials, stdout io.Writer) error {
 	for name, value := range mapCredEnvs(&creds) {
 		_, err := fmt.Fprintf(stdout, "export %s=%q;\n", name, value)
@@ -93,6 +109,7 @@ func mapCredEnvs(creds *aws.Credentials) map[string]string {
 const (
 	useName     = "use"
 	refreshName = "refresh"
+	processName = "process"
 	resetName   = "reset"
 )
 

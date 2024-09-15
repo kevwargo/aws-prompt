@@ -46,6 +46,7 @@ func MainCommand() *cobra.Command {
 	cmd.AddCommand(ps1Command(os.Stdout))
 	cmd.AddCommand(useCommand(os.Stdout))
 	cmd.AddCommand(refreshCommand(os.Stdout))
+	cmd.AddCommand(processCommand(os.Stdout))
 	cmd.AddCommand(resetCommand(os.Stdout))
 
 	return cmd
