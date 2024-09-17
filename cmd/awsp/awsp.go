@@ -2,9 +2,7 @@ package awsp
 
 import (
 	_ "embed"
-	"fmt"
 	"os"
-	"strings"
 	"text/template"
 
 	"github.com/spf13/cobra"
@@ -21,41 +19,33 @@ var InitCmd = &cobra.Command{
 		}
 
 		return tmpl.Execute(os.Stdout, tmplInput{
-			MainCmd: awspName,
-			RootCmd: config.Name,
-			PS1Cmd:  ps1Name,
+			MainCmd:     awspName,
+			RootCmd:     config.RootCmd,
+			PS1Cmd:      ps1Name,
+			SourceStart: sourceStart,
 		})
 	},
 }
 
 func MainCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           awspName,
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("invalid command %s", strings.Join(args, " "))
-		},
+		Use: awspName,
 	}
 
-	// we need to prevent any unwanted output from being written into stdout
-	// because stdout is interpreted (sourced) as-is by bash
-	cmd.SetOut(os.Stderr)
-	cmd.PersistentPreRun = func(_ *cobra.Command, _ []string) { os.Stdout = os.Stderr }
-
-	cmd.AddCommand(ps1Command(os.Stdout))
-	cmd.AddCommand(useCommand(os.Stdout))
-	cmd.AddCommand(refreshCommand(os.Stdout))
-	cmd.AddCommand(processCommand(os.Stdout))
-	cmd.AddCommand(resetCommand(os.Stdout))
+	cmd.AddCommand(ps1Cmd)
+	cmd.AddCommand(useCmd)
+	cmd.AddCommand(refreshCmd)
+	cmd.AddCommand(processCmd)
+	cmd.AddCommand(resetCmd)
 
 	return cmd
 }
 
 type tmplInput struct {
-	MainCmd string
-	RootCmd string
-	PS1Cmd  string
+	MainCmd     string
+	RootCmd     string
+	PS1Cmd      string
+	SourceStart string
 }
 
 //go:embed awsp.sh
@@ -68,4 +58,6 @@ const (
 	awsAccessKeyIDEnvVar     = "AWS_ACCESS_KEY_ID"
 	awsSecretAccessKeyEnvVar = "AWS_SECRET_ACCESS_KEY"
 	awsSessionTokenEnvVar    = "AWS_SESSION_TOKEN"
+
+	sourceStart = "### * aws-prompt awsp source start * ###"
 )

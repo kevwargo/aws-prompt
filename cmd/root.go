@@ -10,7 +10,7 @@ import (
 
 func Execute() error {
 	cmd := &cobra.Command{
-		Use:           config.Name,
+		Use:           config.RootCmd,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}

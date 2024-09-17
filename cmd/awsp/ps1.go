@@ -3,7 +3,6 @@ package awsp
 import (
 	_ "embed"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"text/template"
@@ -14,23 +13,22 @@ import (
 	"kevwargo/aws-prompt/internal/creds"
 )
 
-func ps1Command(stdout io.Writer) *cobra.Command {
-	return &cobra.Command{
-		Use: ps1Name,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			tmpl, err := template.New(ps1Name).Parse(ps1Body)
-			if err != nil {
-				return err
-			}
-
-			data, err := describeActiveCreds()
-			if data != "" {
-				return tmpl.Execute(stdout, data)
-			}
-
+var ps1Cmd = &cobra.Command{
+	Use: ps1Name,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		tmpl, err := template.New(ps1Name).Parse(ps1Body)
+		if err != nil {
 			return err
-		},
-	}
+		}
+
+		data, err := describeActiveCreds()
+		if data != "" {
+			fmt.Println(sourceStart)
+			return tmpl.Execute(os.Stdout, data)
+		}
+
+		return err
+	},
 }
 
 func describeActiveCreds() (string, error) {

@@ -1,3 +1,3 @@
 package config
 
-const Name = "aws-prompt"
+const RootCmd = "aws-prompt"
