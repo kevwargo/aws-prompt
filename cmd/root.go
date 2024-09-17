@@ -13,6 +13,9 @@ func Execute() error {
 		Use:           config.RootCmd,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDescriptions: true,
+		},
 	}
 
 	cmd.AddCommand(awsp.InitCmd, awsp.MainCommand())

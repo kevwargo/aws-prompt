@@ -4,8 +4,11 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/internal/creds"
@@ -24,6 +27,9 @@ var useCmd = &cobra.Command{
 		fmt.Println(sourceStart)
 		dumpCreds(c)
 		return nil
+	},
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return completeProfiles(), cobra.ShellCompDirectiveNoFileComp
 	},
 }
 
@@ -90,6 +96,32 @@ func mapCredEnvs(creds aws.Credentials) map[string]string {
 		awsSecretAccessKeyEnvVar: creds.SecretAccessKey,
 		awsSessionTokenEnvVar:    creds.SessionToken,
 	}
+}
+
+var regexConfigProfile = regexp.MustCompile(`^\[profile +([^\]]+)\]`)
+
+func completeProfiles() (profiles []string) {
+	profileNames := make(map[string]struct{})
+
+	for _, f := range config.DefaultSharedConfigFiles {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+
+		for _, line := range strings.Split(string(b), "\n") {
+			m := regexConfigProfile.FindStringSubmatch(line)
+			if len(m) > 1 {
+				profileNames[m[1]] = struct{}{}
+			}
+		}
+	}
+
+	for p := range profileNames {
+		profiles = append(profiles, p)
+	}
+
+	return
 }
 
 const (
