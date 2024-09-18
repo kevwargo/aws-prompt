@@ -17,7 +17,8 @@
     done
 }
 
-. <({{.RootCmd}} completion bash)
+. <({{.RootCmd}} bash-completion)
+# . <({{.RootCmd}} bash-completion {{.MainCmd}})
 
 if [[ "${PROMPT_COMMAND}" != *"{{.MainCmd}} {{.PS1Cmd}}"* ]]; then
     PROMPT_COMMAND+=' ; {{.MainCmd}} {{.PS1Cmd}}'
