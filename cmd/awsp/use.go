@@ -1,7 +1,6 @@
 package awsp
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"regexp"
@@ -24,13 +23,10 @@ var useCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Println(sourceStart)
 		dumpCreds(c)
 		return nil
 	},
-	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return completeProfiles(), cobra.ShellCompDirectiveNoFileComp
-	},
+	ValidArgsFunction: completeProfiles,
 }
 
 var refreshCmd = &cobra.Command{
@@ -48,7 +44,6 @@ var refreshCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Println(sourceStart)
 		dumpCreds(c)
 		return nil
 	},
@@ -59,7 +54,7 @@ var resetCmd = &cobra.Command{
 	Aliases: []string{"x"},
 	Args:    cobra.NoArgs,
 	RunE: func(_ *cobra.Command, _ []string) error {
-		fmt.Println(sourceStart)
+		fmt.Println(SourceStart)
 
 		for _, env := range []string{awsAccessKeyIDEnvVar, awsSecretAccessKeyEnvVar, awsSessionTokenEnvVar} {
 			fmt.Printf("unset %s\n", env)
@@ -85,6 +80,8 @@ var processCmd = &cobra.Command{
 }
 
 func dumpCreds(creds aws.Credentials) {
+	fmt.Println(SourceStart)
+
 	for name, value := range mapCredEnvs(creds) {
 		fmt.Printf("export %s=%q\n", name, value)
 	}
@@ -100,8 +97,8 @@ func mapCredEnvs(creds aws.Credentials) map[string]string {
 
 var regexConfigProfile = regexp.MustCompile(`^\[profile +([^\]]+)\]`)
 
-func completeProfiles() (profiles []string) {
-	profileNames := make(map[string]struct{})
+func completeProfiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	var profiles []string
 
 	for _, f := range config.DefaultSharedConfigFiles {
 		b, err := os.ReadFile(f)
@@ -112,16 +109,12 @@ func completeProfiles() (profiles []string) {
 		for _, line := range strings.Split(string(b), "\n") {
 			m := regexConfigProfile.FindStringSubmatch(line)
 			if len(m) > 1 {
-				profileNames[m[1]] = struct{}{}
+				profiles = append(profiles, m[1])
 			}
 		}
 	}
 
-	for p := range profileNames {
-		profiles = append(profiles, p)
-	}
-
-	return
+	return profiles, cobra.ShellCompDirectiveNoFileComp
 }
 
 const (

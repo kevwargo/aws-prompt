@@ -6,13 +6,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/cmd/awsp"
-	"kevwargo/aws-prompt/internal/config"
+	"kevwargo/aws-prompt/cmd/shellinit"
 	"kevwargo/aws-prompt/internal/creds/cache"
 )
 
 func Execute() error {
-	cmd := &cobra.Command{
-		Use:           config.RootCmd,
+	rootCmd := &cobra.Command{
+		Use:           "aws-prompt",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -20,14 +20,16 @@ func Execute() error {
 		},
 	}
 
-	awspMainCmd := awsp.MainCommand()
+	awspCommands := awsp.InitCommands()
+	shellInitCmd := shellinit.Command(rootCmd.Name(), awspCommands)
 
-	cmd.AddCommand(awsp.InitCmd, awspMainCmd)
-	cmd.AddCommand(cache.RunServerCmd)
+	rootCmd.AddCommand(shellInitCmd)
+	rootCmd.AddCommand(awspCommands.Main)
+	rootCmd.AddCommand(cache.RunServerCmd)
 
-	initBashCompletionCommand(cmd, awspMainCmd)
+	initBashCompletionCommand(rootCmd, awspCommands.Main)
 
-	return cmd.Execute()
+	return rootCmd.Execute()
 }
 
 func initBashCompletionCommand(rootCmd, awspCmd *cobra.Command) {

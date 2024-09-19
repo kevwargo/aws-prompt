@@ -23,7 +23,7 @@ var ps1Cmd = &cobra.Command{
 
 		data, err := describeActiveCreds()
 		if data != "" {
-			fmt.Println(sourceStart)
+			fmt.Println(SourceStart)
 			return tmpl.Execute(os.Stdout, data)
 		}
 
