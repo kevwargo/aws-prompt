@@ -7,6 +7,6 @@ import (
 type Info struct {
 	AccountID   string
 	Profile     *string
-	AssumedRole *string
+	SessionName *string
 	Expiration  *time.Time
 }

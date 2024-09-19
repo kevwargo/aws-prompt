@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"sync"
 	"syscall"
 
@@ -69,6 +70,60 @@ func (s *server) Store(req StoreRequest, resp *struct{}) error {
 	return nil
 }
 
+func (s *server) Info(accessKeyID string, resp *awskey.Info) error {
+	s.accessKeyInfoMutex.Lock()
+	defer s.accessKeyInfoMutex.Unlock()
+
+	if info := s.accessKeyInfo[accessKeyID]; info != nil {
+		*resp = *info
+	} else {
+		accountID, err := awskey.DecodeAccountID(accessKeyID)
+		if err != nil {
+			return err
+		}
+
+		*resp = awskey.Info{AccountID: accountID}
+	}
+
+	return nil
+}
+
+func (s *server) List(req struct{}, resp *[]string) error {
+	*resp = append(s.listProfiles(), s.listSessions()...)
+
+	return nil
+}
+
+func (s *server) listProfiles() (profiles []string) {
+	s.profileCredsMutex.Lock()
+	defer s.profileCredsMutex.Unlock()
+
+	for p, creds := range s.profileCreds {
+		if !creds.Expired() {
+			profiles = append(profiles, p)
+		}
+	}
+
+	slices.Sort(profiles)
+
+	return
+}
+
+func (s *server) listSessions() (sessions []string) {
+	s.accessKeyInfoMutex.Lock()
+	defer s.accessKeyInfoMutex.Unlock()
+
+	for _, info := range s.accessKeyInfo {
+		if info.Profile == nil && info.SessionName != nil {
+			sessions = append(sessions, *info.SessionName)
+		}
+	}
+
+	slices.Sort(sessions)
+
+	return
+}
+
 func (s *server) storeProfile(profile string, creds aws.Credentials) {
 	s.profileCredsMutex.Lock()
 	defer s.profileCredsMutex.Unlock()
@@ -106,12 +161,12 @@ func (s *server) storeAccessKey(req StoreRequest) error {
 
 	log.Printf("Stored creds for %s%s", identity, expiration)
 
-	go s.storeAssumedRole(req)
+	go s.resolveSessionName(req)
 
 	return nil
 }
 
-func (s *server) storeAssumedRole(req StoreRequest) {
+func (s *server) resolveSessionName(req StoreRequest) {
 	credsFn := func(_ context.Context) (aws.Credentials, error) {
 		return req.Creds, nil
 	}
@@ -136,34 +191,16 @@ func (s *server) storeAssumedRole(req StoreRequest) {
 	defer s.accessKeyInfoMutex.Unlock()
 
 	if info := s.accessKeyInfo[req.Creds.AccessKeyID]; info != nil {
-		assumedRole := fmt.Sprintf("%s/%s", m[1], m[2])
-		info.AssumedRole = &assumedRole
+		sessionName := fmt.Sprintf("%s/%s", m[1], m[2])
+		info.SessionName = &sessionName
 
 		var profile string
 		if req.Profile != nil {
 			profile = fmt.Sprintf(" for profile %q", *req.Profile)
 		}
 
-		log.Printf("Stored AssumedRole %q%s", assumedRole, profile)
+		log.Printf("Stored session %q%s", sessionName, profile)
 	}
-}
-
-func (s *server) Info(accessKeyID string, resp *awskey.Info) error {
-	s.accessKeyInfoMutex.Lock()
-	defer s.accessKeyInfoMutex.Unlock()
-
-	if info := s.accessKeyInfo[accessKeyID]; info != nil {
-		*resp = *info
-	} else {
-		accountID, err := awskey.DecodeAccountID(accessKeyID)
-		if err != nil {
-			return err
-		}
-
-		*resp = awskey.Info{AccountID: accountID}
-	}
-
-	return nil
 }
 
 func (s *server) run() error {

@@ -35,11 +35,13 @@ func (c *client) Store(req StoreRequest) error {
 }
 
 func (c *client) Info(accessKeyID string) (info awskey.Info, err error) {
-	if err := c.c.Call(serverName+".Info", accessKeyID, &info); err != nil {
-		return awskey.Info{}, err
-	}
+	err = c.c.Call(serverName+".Info", accessKeyID, &info)
+	return
+}
 
-	return info, nil
+func (c *client) List() (profiles []string, err error) {
+	err = c.c.Call(serverName+".List", struct{}{}, &profiles)
+	return
 }
 
 func (c *client) Close() {

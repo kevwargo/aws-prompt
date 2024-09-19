@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/internal/creds"
+	"kevwargo/aws-prompt/internal/creds/cache"
 )
 
 var useCmd = &cobra.Command{
@@ -26,7 +28,14 @@ var useCmd = &cobra.Command{
 		dumpCreds(c)
 		return nil
 	},
-	ValidArgsFunction: completeProfiles,
+	ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		names, err := generateCompletions()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return names, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveKeepOrder
+	},
 }
 
 var refreshCmd = &cobra.Command{
@@ -97,9 +106,27 @@ func mapCredEnvs(creds aws.Credentials) map[string]string {
 
 var regexConfigProfile = regexp.MustCompile(`^\[profile +([^\]]+)\]`)
 
-func completeProfiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	var profiles []string
+func generateCompletions() ([]string, error) {
+	c, err := cache.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
 
+	names, err := c.List()
+	if err != nil {
+		return nil, err
+	}
+
+	if profiles := listProfiles(names); len(profiles) > 0 {
+		names = append(names, "***")
+		names = append(names, profiles...)
+	}
+
+	return names, nil
+}
+
+func listProfiles(skipList []string) (profiles []string) {
 	for _, f := range config.DefaultSharedConfigFiles {
 		b, err := os.ReadFile(f)
 		if err != nil {
@@ -109,12 +136,17 @@ func completeProfiles(cmd *cobra.Command, args []string, toComplete string) ([]s
 		for _, line := range strings.Split(string(b), "\n") {
 			m := regexConfigProfile.FindStringSubmatch(line)
 			if len(m) > 1 {
-				profiles = append(profiles, m[1])
+				profile := m[1]
+				if !slices.Contains(skipList, profile) {
+					profiles = append(profiles, profile)
+				}
 			}
 		}
 	}
 
-	return profiles, cobra.ShellCompDirectiveNoFileComp
+	slices.Sort(profiles)
+
+	return
 }
 
 const (

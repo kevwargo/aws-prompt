@@ -29,6 +29,7 @@ type Cache interface {
 	Get(profile string) (*aws.Credentials, error)
 	Store(req StoreRequest) error
 	Info(accessKeyID string) (awskey.Info, error)
+	List() ([]string, error)
 	Close()
 }
 
