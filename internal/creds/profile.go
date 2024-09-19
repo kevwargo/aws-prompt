@@ -94,7 +94,7 @@ func createMFAProvider(o *stscreds.AssumeRoleOptions, profile string) func() (st
 	prompt := fmt.Sprintf("Provide MFA one time code for (%s): ", strings.Join(promptParts, ", "))
 
 	return func() (string, error) {
-		_, err := fmt.Print(prompt)
+		_, err := fmt.Fprint(os.Stderr, prompt)
 		if err != nil {
 			return "", err
 		}
