@@ -1,20 +1,20 @@
 {{.MainCmd}}()
 {
-    {{.RootCmd}} {{.MainCmd}} "$@" | while true
-    do
-        IFS='' read -r line
-        read_rc=$?
+    local -a payload
+    local -a source_lines
+    local line
 
-        if [ "$line" = "{{.SourceStart}}" ]; then
-            . /dev/stdin
-            return
-        elif [ $read_rc = 0 ]; then
-            echo "$line"
+    mapfile payload < <({{.RootCmd}} {{.MainCmd}} "$@")
+
+    for line in "${payload[@]}"; do
+        if [ ${#source_lines[@]} -gt 0 -o "$line" = $'{{.SourceStart}}\n' ]; then
+            source_lines+=("$line")
         else
             echo -n "$line"
-            return
         fi
     done
+
+    . <(for line in "${source_lines[@]}"; do echo -n "$line"; done)
 }
 
 . <({{.RootCmd}} bash-completion)

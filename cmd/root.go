@@ -32,15 +32,14 @@ func Execute() error {
 
 func initBashCompletionCommand(rootCmd, awspCmd *cobra.Command) {
 	cmd := &cobra.Command{
-		Use:  "bash-completion",
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(c *cobra.Command, args []string) error {
-			out := c.OutOrStdout()
-
+		Use:       "bash-completion",
+		Args:      cobra.MaximumNArgs(1),
+		ValidArgs: []string{awspCmd.Name()},
+		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return rootCmd.GenBashCompletionV2(out, false)
-			} else if args[0] == awspCmd.Use {
-				return awspCmd.GenBashCompletionV2(out, false)
+				return rootCmd.GenBashCompletionV2(rootCmd.OutOrStdout(), false)
+			} else if args[0] == awspCmd.Name() {
+				return awspCmd.GenBashCompletionV2(awspCmd.OutOrStdout(), false)
 			}
 
 			return fmt.Errorf("cannot generate bash completion for standalone %q command", args[0])
