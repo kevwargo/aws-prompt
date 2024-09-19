@@ -24,6 +24,9 @@ func Command(rootCmdName string, awspCommands awsp.Commands) *cobra.Command {
 			var sourcableCommands []string
 			for _, c := range awspCommands.Main.Commands() {
 				sourcableCommands = append(sourcableCommands, fmt.Sprintf("%q", c.Name()))
+				for _, a := range c.Aliases {
+					sourcableCommands = append(sourcableCommands, fmt.Sprintf("%q", a))
+				}
 			}
 
 			return tmpl.Execute(os.Stdout, tmplInput{
