@@ -12,17 +12,17 @@ import (
 	"kevwargo/aws-prompt/cmd/awsp"
 )
 
-func Command(rootCmdName string, awspCommands awsp.Commands) *cobra.Command {
-	return &cobra.Command{
+func InitCommand(rootCmd *cobra.Command) {
+	initCmd := &cobra.Command{
 		Use: "init",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tmpl, err := template.New(awspCommands.Main.Name()).Parse(shellBody)
+			tmpl, err := template.New(awsp.MainCmd.Name()).Parse(shellBody)
 			if err != nil {
 				return err
 			}
 
 			var sourcableCommands []string
-			for _, c := range awspCommands.Main.Commands() {
+			for _, c := range awsp.MainCmd.Commands() {
 				sourcableCommands = append(sourcableCommands, fmt.Sprintf("%q", c.Name()))
 				for _, a := range c.Aliases {
 					sourcableCommands = append(sourcableCommands, fmt.Sprintf("%q", a))
@@ -30,15 +30,17 @@ func Command(rootCmdName string, awspCommands awsp.Commands) *cobra.Command {
 			}
 
 			return tmpl.Execute(os.Stdout, tmplInput{
-				MainCmd:            awspCommands.Main.Name(),
-				RootCmd:            rootCmdName,
-				PS1Cmd:             awspCommands.PS1.Name(),
+				MainCmd:            awsp.MainCmd.Name(),
+				RootCmd:            rootCmd.Name(),
+				PS1Cmd:             awsp.PS1Cmd.Name(),
 				SourceStart:        awsp.SourceStart,
 				SourcableCommands:  strings.Join(sourcableCommands, "|"),
 				CompletionCommands: fmt.Sprintf("%q|%q", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd),
 			})
 		},
 	}
+
+	rootCmd.AddCommand(initCmd)
 }
 
 type tmplInput struct {

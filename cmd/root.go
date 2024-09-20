@@ -20,28 +20,26 @@ func Execute() error {
 		},
 	}
 
-	awspCommands := awsp.InitCommands()
-	shellInitCmd := shellinit.Command(rootCmd.Name(), awspCommands)
+	shellinit.InitCommand(rootCmd)
 
-	rootCmd.AddCommand(shellInitCmd)
-	rootCmd.AddCommand(awspCommands.Main)
+	rootCmd.AddCommand(awsp.MainCmd)
 	rootCmd.AddCommand(cache.RunServerCmd)
 
-	initBashCompletionCommand(rootCmd, awspCommands.Main)
+	initBashCompletionCommand(rootCmd)
 
 	return rootCmd.Execute()
 }
 
-func initBashCompletionCommand(rootCmd, awspCmd *cobra.Command) {
+func initBashCompletionCommand(rootCmd *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:       "bash-completion",
 		Args:      cobra.MaximumNArgs(1),
-		ValidArgs: []string{awspCmd.Name()},
+		ValidArgs: []string{awsp.MainCmd.Name()},
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return rootCmd.GenBashCompletionV2(rootCmd.OutOrStdout(), false)
-			} else if args[0] == awspCmd.Name() {
-				return awspCmd.GenBashCompletionV2(awspCmd.OutOrStdout(), false)
+			} else if args[0] == awsp.MainCmd.Name() {
+				return awsp.MainCmd.GenBashCompletionV2(awsp.MainCmd.OutOrStdout(), false)
 			}
 
 			return fmt.Errorf("cannot generate bash completion for standalone %q command", args[0])

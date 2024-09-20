@@ -13,7 +13,7 @@ import (
 	"kevwargo/aws-prompt/internal/creds"
 )
 
-var ps1Cmd = &cobra.Command{
+var PS1Cmd = &cobra.Command{
 	Use: ps1Name,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		tmpl, err := template.New(ps1Name).Parse(ps1Body)

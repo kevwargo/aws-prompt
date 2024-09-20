@@ -15,7 +15,7 @@ import (
 	"kevwargo/aws-prompt/internal/creds/cache"
 )
 
-var useCmd = &cobra.Command{
+var UseCmd = &cobra.Command{
 	Use:     useName,
 	Aliases: []string{"u"},
 	Args:    cobra.ExactArgs(1),
@@ -38,7 +38,7 @@ var useCmd = &cobra.Command{
 	},
 }
 
-var refreshCmd = &cobra.Command{
+var RefreshCmd = &cobra.Command{
 	Use:     refreshName,
 	Aliases: []string{"f"},
 	Args:    cobra.NoArgs,
@@ -58,7 +58,7 @@ var refreshCmd = &cobra.Command{
 	},
 }
 
-var resetCmd = &cobra.Command{
+var ResetCmd = &cobra.Command{
 	Use:     resetName,
 	Aliases: []string{"x"},
 	Args:    cobra.NoArgs,
@@ -73,7 +73,7 @@ var resetCmd = &cobra.Command{
 	},
 }
 
-var processCmd = &cobra.Command{
+var ProcessCmd = &cobra.Command{
 	Use:     processName,
 	Aliases: []string{"p"},
 	Args:    cobra.MinimumNArgs(1),

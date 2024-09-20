@@ -4,26 +4,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type Commands struct {
-	Main *cobra.Command
-	PS1  *cobra.Command
+var MainCmd = &cobra.Command{
+	Use: "awsp",
 }
 
-func InitCommands() Commands {
-	mainCmd := &cobra.Command{
-		Use: "awsp",
-	}
-
-	mainCmd.AddCommand(ps1Cmd)
-	mainCmd.AddCommand(useCmd)
-	mainCmd.AddCommand(refreshCmd)
-	mainCmd.AddCommand(processCmd)
-	mainCmd.AddCommand(resetCmd)
-
-	return Commands{
-		Main: mainCmd,
-		PS1:  ps1Cmd,
-	}
+func init() {
+	MainCmd.AddCommand(PS1Cmd)
+	MainCmd.AddCommand(UseCmd)
+	MainCmd.AddCommand(RefreshCmd)
+	MainCmd.AddCommand(ProcessCmd)
+	MainCmd.AddCommand(ResetCmd)
 }
 
 const (
