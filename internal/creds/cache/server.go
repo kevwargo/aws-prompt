@@ -1,23 +1,22 @@
 package cache
 
 import (
-	"context"
+	"cmp"
 	"fmt"
 	"log"
 	"net"
 	"net/rpc"
 	"os"
 	"os/signal"
-	"regexp"
 	"slices"
 	"sync"
 	"syscall"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/internal/awskey"
+	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
 var RunServerCmd = &cobra.Command{
@@ -25,8 +24,8 @@ var RunServerCmd = &cobra.Command{
 	Hidden: true,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		srv := server{
-			profileCreds:  make(map[string]aws.Credentials),
-			accessKeyInfo: make(map[string]*awskey.Info),
+			profileCreds:  make(map[profile.Name]aws.Credentials),
+			accessKeyInfo: make(map[string]awskey.Info),
 		}
 
 		return srv.run()
@@ -34,25 +33,25 @@ var RunServerCmd = &cobra.Command{
 }
 
 type server struct {
-	profileCreds      map[string]aws.Credentials
+	profileCreds      map[profile.Name]aws.Credentials
 	profileCredsMutex sync.Mutex
 
-	accessKeyInfo      map[string]*awskey.Info
+	accessKeyInfo      map[string]awskey.Info
 	accessKeyInfoMutex sync.Mutex
 }
 
-func (s *server) Get(profile string, resp *GetResp) error {
+func (s *server) Get(name profile.Name, resp *GetResp) error {
 	s.profileCredsMutex.Lock()
 	defer s.profileCredsMutex.Unlock()
 
-	if creds, ok := s.profileCreds[profile]; ok {
+	if creds, ok := s.profileCreds[name]; ok {
 		if !creds.Expired() {
 			resp.Creds = &creds
 			return nil
 		}
 
-		log.Printf("Removing creds for %q expired on %s", profile, creds.Expires)
-		delete(s.profileCreds, profile)
+		log.Printf("Removing creds for %q expired on %s", name, creds.Expires)
+		delete(s.profileCreds, name)
 	}
 
 	resp.Creds = nil
@@ -63,9 +62,7 @@ func (s *server) Store(req StoreRequest, resp *struct{}) error {
 	if err := s.storeAccessKey(req); err != nil {
 		return err
 	}
-	if req.Profile != nil {
-		s.storeProfile(*req.Profile, req.Creds)
-	}
+	s.storeProfile(req.Profile, req.Creds)
 
 	return nil
 }
@@ -74,8 +71,8 @@ func (s *server) Info(accessKeyID string, resp *awskey.Info) error {
 	s.accessKeyInfoMutex.Lock()
 	defer s.accessKeyInfoMutex.Unlock()
 
-	if info := s.accessKeyInfo[accessKeyID]; info != nil {
-		*resp = *info
+	if info, ok := s.accessKeyInfo[accessKeyID]; ok {
+		*resp = info
 	} else {
 		accountID, err := awskey.DecodeAccountID(accessKeyID)
 		if err != nil {
@@ -88,43 +85,28 @@ func (s *server) Info(accessKeyID string, resp *awskey.Info) error {
 	return nil
 }
 
-func (s *server) List(req struct{}, resp *[]string) error {
-	*resp = append(s.listProfiles(), s.listSessions()...)
-
-	return nil
-}
-
-func (s *server) listProfiles() (profiles []string) {
+func (s *server) List(req struct{}, resp *[]profile.Name) error {
 	s.profileCredsMutex.Lock()
 	defer s.profileCredsMutex.Unlock()
 
 	for p, creds := range s.profileCreds {
 		if !creds.Expired() {
-			profiles = append(profiles, p)
+			*resp = append(*resp, p)
 		}
 	}
 
-	slices.Sort(profiles)
-
-	return
-}
-
-func (s *server) listSessions() (sessions []string) {
-	s.accessKeyInfoMutex.Lock()
-	defer s.accessKeyInfoMutex.Unlock()
-
-	for _, info := range s.accessKeyInfo {
-		if info.Profile == nil && info.SessionName != nil {
-			sessions = append(sessions, *info.SessionName)
+	slices.SortFunc(*resp, func(a, b profile.Name) int {
+		if a.IsPseudo() != b.IsPseudo() {
+			// sort pseudo-profiles after the normal ones
+			return -cmp.Compare(a, b)
 		}
-	}
+		return cmp.Compare(a, b)
+	})
 
-	slices.Sort(sessions)
-
-	return
+	return nil
 }
 
-func (s *server) storeProfile(profile string, creds aws.Credentials) {
+func (s *server) storeProfile(profile profile.Name, creds aws.Credentials) {
 	s.profileCredsMutex.Lock()
 	defer s.profileCredsMutex.Unlock()
 
@@ -140,7 +122,7 @@ func (s *server) storeAccessKey(req StoreRequest) error {
 		return err
 	}
 
-	info := &awskey.Info{
+	info := awskey.Info{
 		AccountID: accountID,
 		Profile:   req.Profile,
 	}
@@ -149,58 +131,14 @@ func (s *server) storeAccessKey(req StoreRequest) error {
 	}
 	s.accessKeyInfo[req.Creds.AccessKeyID] = info
 
-	identity := fmt.Sprintf("account %s", accountID)
-	if req.Profile != nil {
-		identity = fmt.Sprintf("profile %q", *req.Profile)
-	}
-
 	var expiration string
 	if req.Creds.CanExpire {
 		expiration = fmt.Sprintf(" (expiring on %s)", req.Creds.Expires)
 	}
 
-	log.Printf("Stored creds for %s%s", identity, expiration)
-
-	go s.resolveSessionName(req)
+	log.Printf("Stored creds for profile %q%s", req.Profile, expiration)
 
 	return nil
-}
-
-func (s *server) resolveSessionName(req StoreRequest) {
-	credsFn := func(_ context.Context) (aws.Credentials, error) {
-		return req.Creds, nil
-	}
-	stsOpts := sts.Options{
-		Credentials: aws.CredentialsProviderFunc(credsFn),
-		Region:      req.Region,
-	}
-	ctx := context.Background()
-
-	resp, err := sts.New(stsOpts).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		log.Printf("getting caller identity for %s: %s", req.Creds.AccessKeyID, err.Error())
-		return
-	}
-
-	m := assumedRoleRegex.FindStringSubmatch(*resp.Arn)
-	if m == nil {
-		return
-	}
-
-	s.accessKeyInfoMutex.Lock()
-	defer s.accessKeyInfoMutex.Unlock()
-
-	if info := s.accessKeyInfo[req.Creds.AccessKeyID]; info != nil {
-		sessionName := fmt.Sprintf("%s/%s", m[1], m[2])
-		info.SessionName = &sessionName
-
-		var profile string
-		if req.Profile != nil {
-			profile = fmt.Sprintf(" for profile %q", *req.Profile)
-		}
-
-		log.Printf("Stored session %q%s", sessionName, profile)
-	}
 }
 
 func (s *server) run() error {
@@ -235,5 +173,3 @@ func handleSignals(listener net.Listener) {
 }
 
 const serverName = "awsp"
-
-var assumedRoleRegex = regexp.MustCompile("arn:aws:sts::([0-9]{12}):assumed-role/([^/]+)(/.*)?")

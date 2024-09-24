@@ -7,16 +7,17 @@ import (
 
 	"kevwargo/aws-prompt/internal/awskey"
 	"kevwargo/aws-prompt/internal/creds/cache"
+	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
-func Get(profile string) (aws.Credentials, error) {
+func Get(name profile.Name) (aws.Credentials, error) {
 	c, err := cache.Open()
 	if err != nil {
 		return aws.Credentials{}, err
 	}
 	defer c.Close()
 
-	creds, err := c.Get(profile)
+	creds, err := c.Get(name)
 	if err != nil {
 		return aws.Credentials{}, err
 	}
@@ -25,7 +26,7 @@ func Get(profile string) (aws.Credentials, error) {
 		return *creds, nil
 	}
 
-	return resolveProfile(profile, c)
+	return resolveProfile(name, c)
 }
 
 func Describe(accessKeyID string) (awskey.Info, error) {
@@ -50,9 +51,9 @@ func Refresh(accessKeyID string) (aws.Credentials, error) {
 		return aws.Credentials{}, err
 	}
 
-	if info.Profile == nil {
+	if info.Profile == "" || info.Profile.IsPseudo() {
 		return aws.Credentials{}, errors.New("Current credentials cannot be refreshed")
 	}
 
-	return resolveProfile(*info.Profile, c)
+	return resolveProfile(info.Profile, c)
 }

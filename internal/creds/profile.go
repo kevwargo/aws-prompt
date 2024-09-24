@@ -17,29 +17,29 @@ import (
 	"github.com/aws/smithy-go"
 
 	"kevwargo/aws-prompt/internal/creds/cache"
+	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
-func resolveProfile(profile string, c cache.Cache) (aws.Credentials, error) {
+func resolveProfile(name profile.Name, c cache.Cache) (aws.Credentials, error) {
 	ctx := context.Background()
 
-	creds, region, err := loadProfileCreds(ctx, profile)
+	creds, region, err := loadProfileCreds(ctx, name)
 	if err != nil {
-		if err := tryRelogin(err, profile); err != nil {
+		if err := tryRelogin(err, name); err != nil {
 			return aws.Credentials{}, err
 		}
 
-		creds, region, err = loadProfileCreds(ctx, profile)
+		creds, region, err = loadProfileCreds(ctx, name)
 		if err != nil {
 			return aws.Credentials{}, err
 		}
 	}
 
-	log.Printf("Loaded the config for %q:%s", profile, region)
+	log.Printf("Loaded the config for %q:%s", name, region)
 
 	req := cache.StoreRequest{
-		Profile: &profile,
+		Profile: name,
 		Creds:   creds,
-		Region:  region,
 	}
 	if err := c.Store(req); err != nil {
 		return aws.Credentials{}, err
@@ -48,42 +48,42 @@ func resolveProfile(profile string, c cache.Cache) (aws.Credentials, error) {
 	return creds, nil
 }
 
-func loadProfileCreds(ctx context.Context, profile string) (aws.Credentials, string, error) {
+func loadProfileCreds(ctx context.Context, name profile.Name) (aws.Credentials, string, error) {
 	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithSharedConfigProfile(profile),
+		config.WithSharedConfigProfile(string(name)),
 		config.WithAssumeRoleCredentialOptions(func(o *stscreds.AssumeRoleOptions) {
-			o.TokenProvider = createMFAProvider(o, profile)
+			o.TokenProvider = createMFAProvider(o, name)
 		}),
 	)
 	if err != nil {
-		return aws.Credentials{}, "", fmt.Errorf("loading config for profile %q: %w", profile, err)
+		return aws.Credentials{}, "", fmt.Errorf("loading config for profile %q: %w", name, err)
 	}
 
 	creds, err := cfg.Credentials.Retrieve(ctx)
 	if err != nil {
-		return aws.Credentials{}, "", fmt.Errorf("retrieving creds for profile %q: %w", profile, err)
+		return aws.Credentials{}, "", fmt.Errorf("retrieving creds for profile %q: %w", name, err)
 	}
 
 	return creds, cfg.Region, nil
 }
 
-func tryRelogin(err error, profile string) error {
+func tryRelogin(err error, profileName profile.Name) error {
 	var opErr *smithy.OperationError
 	if !errors.As(err, &opErr) || opErr.Operation() != ssooidcCreateTokenOp || opErr.Service() != ssooidc.ServiceID {
 		return err
 	}
 
-	log.Printf("SSO token refresh failed for %q, attempting re-login ...", profile)
+	log.Printf("SSO token refresh failed for %q, attempting re-login ...", profileName)
 
-	cmd := exec.Command("aws", "sso", "login", "--profile", profile)
+	cmd := exec.Command("aws", "sso", "login", "--profile", string(profileName))
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
 }
 
-func createMFAProvider(o *stscreds.AssumeRoleOptions, profile string) func() (string, error) {
-	promptParts := []string{fmt.Sprintf("profile:%q", profile)}
+func createMFAProvider(o *stscreds.AssumeRoleOptions, profileName profile.Name) func() (string, error) {
+	promptParts := []string{fmt.Sprintf("profile:%q", profileName)}
 	if o.RoleARN != "" {
 		promptParts = append(promptParts, fmt.Sprintf("roleArn:%q", o.RoleARN))
 	}

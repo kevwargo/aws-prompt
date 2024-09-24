@@ -13,15 +13,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"kevwargo/aws-prompt/internal/awskey"
+	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
 type client struct {
 	c *rpc.Client
 }
 
-func (c *client) Get(profile string) (*aws.Credentials, error) {
+func (c *client) Get(name profile.Name) (*aws.Credentials, error) {
 	var resp GetResp
-	if err := c.c.Call(serverName+".Get", profile, &resp); err != nil {
+	if err := c.c.Call(serverName+".Get", name, &resp); err != nil {
 		return nil, err
 	}
 

@@ -13,6 +13,7 @@ import (
 
 	"kevwargo/aws-prompt/internal/creds"
 	"kevwargo/aws-prompt/internal/creds/cache"
+	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
 var UseCmd = &cobra.Command{
@@ -20,7 +21,7 @@ var UseCmd = &cobra.Command{
 	Aliases: []string{"u"},
 	Args:    cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
-		c, err := creds.Get(args[0])
+		c, err := creds.Get(profile.Name(args[0]))
 		if err != nil {
 			return err
 		}

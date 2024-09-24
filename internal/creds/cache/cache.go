@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"kevwargo/aws-prompt/internal/awskey"
+	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
 var (
@@ -26,7 +27,7 @@ func init() {
 }
 
 type Cache interface {
-	Get(profile string) (*aws.Credentials, error)
+	Get(name profile.Name) (*aws.Credentials, error)
 	Store(req StoreRequest) error
 	Info(accessKeyID string) (awskey.Info, error)
 	List() ([]string, error)
@@ -47,7 +48,6 @@ type GetResp struct {
 }
 
 type StoreRequest struct {
-	Profile *string
+	Profile profile.Name
 	Creds   aws.Credentials
-	Region  string
 }
