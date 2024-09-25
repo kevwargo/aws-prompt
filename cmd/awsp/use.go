@@ -120,7 +120,9 @@ func generateCompletions() ([]string, error) {
 	}
 
 	if profiles := listProfiles(names); len(profiles) > 0 {
-		names = append(names, "***")
+		if len(names) > 0 {
+			names = append(names, "***")
+		}
 		names = append(names, profiles...)
 	}
 
