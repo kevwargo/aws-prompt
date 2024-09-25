@@ -24,6 +24,9 @@
             shift
             {{.RootCmd}} "$compcmd" {{.MainCmd}} "$@"
             ;;
+        *)
+            {{.RootCmd}} {{.MainCmd}} "$@"
+            ;;
     esac
 }
 
