@@ -17,16 +17,7 @@ func Get(name profile.Name) (aws.Credentials, error) {
 	}
 	defer c.Close()
 
-	creds, err := c.Get(name)
-	if err != nil {
-		return aws.Credentials{}, err
-	}
-
-	if creds != nil {
-		return *creds, nil
-	}
-
-	return resolveProfile(name, c)
+	return get(c, name)
 }
 
 func Describe(accessKeyID string) (awskey.Info, error) {
@@ -55,5 +46,18 @@ func Refresh(accessKeyID string) (aws.Credentials, error) {
 		return aws.Credentials{}, errors.New("Current credentials cannot be refreshed")
 	}
 
-	return resolveProfile(info.Profile, c)
+	return get(c, info.Profile)
+}
+
+func get(c cache.Cache, name profile.Name) (aws.Credentials, error) {
+	creds, err := c.Get(name)
+	if err != nil {
+		return aws.Credentials{}, err
+	}
+
+	if creds != nil {
+		return *creds, nil
+	}
+
+	return resolveProfile(name, c)
 }
