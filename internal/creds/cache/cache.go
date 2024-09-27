@@ -14,6 +14,8 @@ import (
 var (
 	socketPath string
 	logFile    string
+
+	activeClient *client
 )
 
 func init() {
@@ -31,16 +33,24 @@ type Cache interface {
 	Store(req StoreRequest) error
 	Info(accessKeyID string) (awskey.Info, error)
 	List() ([]string, error)
-	Close()
 }
 
-func Open() (Cache, error) {
-	var c client
-	if err := c.connect(); err != nil {
-		return nil, err
+func WithCache(fn func(Cache) error) (err error) {
+	if activeClient == nil {
+		activeClient, err = connect()
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			if err := activeClient.Close(); err != nil {
+				log.Printf("closing cache server client: %s", err.Error())
+			}
+			activeClient = nil
+		}()
 	}
 
-	return &c, nil
+	return fn(activeClient)
 }
 
 type GetResp struct {

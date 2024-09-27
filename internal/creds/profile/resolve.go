@@ -17,7 +17,7 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-func Resolve(name Name) (*aws.Credentials, error) {
+func Resolve(name Name) (aws.Credentials, error) {
 	ctx := context.Background()
 
 	creds, err := load(ctx, name)
@@ -27,7 +27,7 @@ func Resolve(name Name) (*aws.Credentials, error) {
 		}
 	}
 	if err != nil {
-		return nil, err
+		return aws.Credentials{}, err
 	}
 
 	log.Printf("Loaded the config for %q", name)
@@ -35,7 +35,7 @@ func Resolve(name Name) (*aws.Credentials, error) {
 	return creds, nil
 }
 
-func load(ctx context.Context, name Name) (*aws.Credentials, error) {
+func load(ctx context.Context, name Name) (aws.Credentials, error) {
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithSharedConfigProfile(string(name)),
 		config.WithAssumeRoleCredentialOptions(func(o *stscreds.AssumeRoleOptions) {
@@ -43,15 +43,15 @@ func load(ctx context.Context, name Name) (*aws.Credentials, error) {
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("loading config for profile %q: %w", name, err)
+		return aws.Credentials{}, fmt.Errorf("loading config for profile %q: %w", name, err)
 	}
 
 	creds, err := cfg.Credentials.Retrieve(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("retrieving creds for profile %q: %w", name, err)
+		return aws.Credentials{}, fmt.Errorf("retrieving creds for profile %q: %w", name, err)
 	}
 
-	return &creds, nil
+	return creds, nil
 }
 
 func tryRelogin(err error, profileName Name) error {

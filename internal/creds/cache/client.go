@@ -3,7 +3,6 @@ package cache
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/rpc"
 	"os"
 	"os/exec"
@@ -17,12 +16,12 @@ import (
 )
 
 type client struct {
-	c *rpc.Client
+	*rpc.Client
 }
 
 func (c *client) Get(name profile.Name) (*aws.Credentials, error) {
 	var resp GetResp
-	if err := c.c.Call(serverName+".Get", name, &resp); err != nil {
+	if err := c.Call(serverName+".Get", name, &resp); err != nil {
 		return nil, err
 	}
 
@@ -32,46 +31,40 @@ func (c *client) Get(name profile.Name) (*aws.Credentials, error) {
 func (c *client) Store(req StoreRequest) error {
 	var resp struct{}
 
-	return c.c.Call(serverName+".Store", req, &resp)
+	return c.Call(serverName+".Store", req, &resp)
 }
 
 func (c *client) Info(accessKeyID string) (info awskey.Info, err error) {
-	err = c.c.Call(serverName+".Info", accessKeyID, &info)
+	err = c.Call(serverName+".Info", accessKeyID, &info)
 	return
 }
 
 func (c *client) List() (profiles []string, err error) {
-	err = c.c.Call(serverName+".List", struct{}{}, &profiles)
+	err = c.Call(serverName+".List", struct{}{}, &profiles)
 	return
 }
 
-func (c *client) Close() {
-	if err := c.c.Close(); err != nil {
-		log.Printf("closing cache server client: %s", err.Error())
-	}
-}
-
-func (c *client) connect() (err error) {
-	c.c, err = rpc.Dial("unix", socketPath)
+func connect() (*client, error) {
+	c, err := rpc.Dial("unix", socketPath)
 	if err == nil {
-		return nil
+		return &client{c}, nil
 	}
 
 	if err := handleConnectError(err); err != nil {
-		return err
+		return nil, err
 	}
 	if err := startServer(); err != nil {
-		return err
+		return nil, err
 	}
 
 	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
-		c.c, err = rpc.Dial("unix", socketPath)
+		c, err = rpc.Dial("unix", socketPath)
 		if err == nil {
-			break
+			return &client{c}, nil
 		}
 	}
 
-	return err
+	return nil, err
 }
 
 func startServer() error {

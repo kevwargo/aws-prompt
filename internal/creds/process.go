@@ -34,15 +34,8 @@ func ResolveProcess(name string, args []string) (aws.Credentials, error) {
 		return aws.Credentials{}, err
 	}
 
-	c, err := cache.Open()
-	if err != nil {
-		return aws.Credentials{}, err
-	}
-	defer c.Close()
-
-	if err := c.Store(cache.StoreRequest{
-		Profile: profile,
-		Creds:   creds,
+	if err := cache.WithCache(func(c cache.Cache) (err error) {
+		return c.Store(cache.StoreRequest{Profile: profile, Creds: creds})
 	}); err != nil {
 		return aws.Credentials{}, err
 	}

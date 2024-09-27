@@ -10,67 +10,55 @@ import (
 	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
-func Get(name profile.Name) (aws.Credentials, error) {
-	c, err := cache.Open()
-	if err != nil {
-		return aws.Credentials{}, err
-	}
-	defer c.Close()
+func Get(name profile.Name) (creds aws.Credentials, err error) {
+	cache.WithCache(func(c cache.Cache) error {
+		cached, err := c.Get(name)
+		if err != nil {
+			return err
+		}
 
-	return get(c, name)
+		if cached != nil {
+			creds = *cached
+			return nil
+		}
+
+		creds, err = profile.Resolve(name)
+		if err != nil {
+			return err
+		}
+
+		return c.Store(cache.StoreRequest{
+			Profile: name,
+			Creds:   creds,
+		})
+	})
+
+	return
 }
 
-func Describe(accessKeyID string) (awskey.Info, error) {
-	c, err := cache.Open()
-	if err != nil {
-		return awskey.Info{}, err
-	}
-	defer c.Close()
+func Describe(accessKeyID string) (info awskey.Info, err error) {
+	cache.WithCache(func(c cache.Cache) error {
+		info, err = c.Info(accessKeyID)
+		return err
+	})
 
-	return c.Info(accessKeyID)
+	return
 }
 
-func Refresh(accessKeyID string) (aws.Credentials, error) {
-	c, err := cache.Open()
-	if err != nil {
-		return aws.Credentials{}, err
-	}
-	defer c.Close()
+func Refresh(accessKeyID string) (creds aws.Credentials, err error) {
+	cache.WithCache(func(c cache.Cache) error {
+		info, err := c.Info(accessKeyID)
+		if err != nil {
+			return err
+		}
 
-	info, err := c.Info(accessKeyID)
-	if err != nil {
-		return aws.Credentials{}, err
-	}
+		if info.Profile == "" || info.Profile.IsPseudo() {
+			return errors.New("Current credentials cannot be refreshed")
+		}
 
-	if info.Profile == "" || info.Profile.IsPseudo() {
-		return aws.Credentials{}, errors.New("Current credentials cannot be refreshed")
-	}
+		creds, err = Get(info.Profile)
+		return err
+	})
 
-	return get(c, info.Profile)
-}
-
-func get(c cache.Cache, name profile.Name) (aws.Credentials, error) {
-	creds, err := c.Get(name)
-	if err != nil {
-		return aws.Credentials{}, err
-	}
-
-	if creds != nil {
-		return *creds, nil
-	}
-
-	creds, err = profile.Resolve(name)
-	if err != nil {
-		return aws.Credentials{}, err
-	}
-
-	req := cache.StoreRequest{
-		Profile: name,
-		Creds:   *creds,
-	}
-	if err := c.Store(req); err != nil {
-		return aws.Credentials{}, err
-	}
-
-	return *creds, nil
+	return
 }
