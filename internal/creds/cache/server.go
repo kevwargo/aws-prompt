@@ -2,6 +2,7 @@ package cache
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -154,22 +155,30 @@ func (s *server) run() error {
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", socketPath, err)
 	}
-	go handleSignals(listener)
+
+	var caughtSignal os.Signal
+	go func() {
+		c := make(chan os.Signal)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		caughtSignal = <-c
+		listener.Close()
+	}()
 
 	log.Printf("Accepting connections on %s ...", socketPath)
-	rpc.Accept(listener)
+	for {
+		conn, err := listener.Accept()
+		if err == nil {
+			go rpc.DefaultServer.ServeConn(conn)
+			continue
+		}
 
-	return nil
-}
+		if errors.Is(err, net.ErrClosed) {
+			log.Printf("Closing server due to signal %q", caughtSignal)
+			return nil
+		}
 
-func handleSignals(listener net.Listener) {
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
-	s := <-c
-
-	log.Printf("Caught the %q signal, closing server", s.String())
-	listener.Close()
+		return err
+	}
 }
 
 const serverName = "awsp"
