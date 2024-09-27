@@ -14,7 +14,8 @@ import (
 )
 
 var PS1Cmd = &cobra.Command{
-	Use: ps1Name,
+	Use:    ps1Name,
+	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		tmpl, err := template.New(ps1Name).Parse(ps1Body)
 		if err != nil {
@@ -87,7 +88,7 @@ func colorize(text, color string) string {
 var ps1Body string
 
 const (
-	ps1Name = "ps1"
+	ps1Name = "_ps1"
 
 	colorPurple  = "38;5;56"
 	colorGreen   = "32"
