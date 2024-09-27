@@ -59,5 +59,18 @@ func get(c cache.Cache, name profile.Name) (aws.Credentials, error) {
 		return *creds, nil
 	}
 
-	return resolveProfile(name, c)
+	creds, err = profile.Resolve(name)
+	if err != nil {
+		return aws.Credentials{}, err
+	}
+
+	req := cache.StoreRequest{
+		Profile: name,
+		Creds:   *creds,
+	}
+	if err := c.Store(req); err != nil {
+		return aws.Credentials{}, err
+	}
+
+	return *creds, nil
 }
