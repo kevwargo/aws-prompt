@@ -12,7 +12,8 @@ import (
 
 func Get(name profile.Name) (creds aws.Credentials, err error) {
 	cache.WithCache(func(c cache.Cache) error {
-		cached, err := c.Get(name)
+		var cached *aws.Credentials
+		cached, err = c.Get(name)
 		if err != nil {
 			return err
 		}
@@ -47,7 +48,8 @@ func Describe(accessKeyID string) (info awskey.Info, err error) {
 
 func Refresh(accessKeyID string) (creds aws.Credentials, err error) {
 	cache.WithCache(func(c cache.Cache) error {
-		info, err := c.Info(accessKeyID)
+		var info awskey.Info
+		info, err = c.Info(accessKeyID)
 		if err != nil {
 			return err
 		}
