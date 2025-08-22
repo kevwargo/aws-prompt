@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -21,11 +22,6 @@ func Resolve(name Name) (aws.Credentials, error) {
 	ctx := context.Background()
 
 	creds, err := load(ctx, name)
-	if err != nil {
-		if err = tryRelogin(err, name); err == nil {
-			creds, err = load(ctx, name)
-		}
-	}
 	if err != nil {
 		return aws.Credentials{}, err
 	}
@@ -46,7 +42,7 @@ func load(ctx context.Context, name Name) (aws.Credentials, error) {
 		return aws.Credentials{}, fmt.Errorf("loading config for profile %q: %w", name, err)
 	}
 
-	creds, err := cfg.Credentials.Retrieve(ctx)
+	creds, err := retrieveCredsWithRetry(ctx, cfg.Credentials, name)
 	if err != nil {
 		return aws.Credentials{}, fmt.Errorf("retrieving creds for profile %q: %w", name, err)
 	}
@@ -54,19 +50,41 @@ func load(ctx context.Context, name Name) (aws.Credentials, error) {
 	return creds, nil
 }
 
-func tryRelogin(err error, profileName Name) error {
-	var opErr *smithy.OperationError
-	if !errors.As(err, &opErr) || opErr.Operation() != ssooidcCreateTokenOp || opErr.Service() != ssooidc.ServiceID {
-		return err
+func retrieveCredsWithRetry(ctx context.Context, provider aws.CredentialsProvider, profileName Name) (aws.Credentials, error) {
+	creds, err := provider.Retrieve(ctx)
+
+	if isErrSSOCreateToken(err) || isErrSSOCachedTokenFile(err) {
+		cmd := exec.Command("aws", "sso", "login", "--profile", string(profileName))
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return aws.Credentials{}, err
+		}
+
+		return provider.Retrieve(ctx)
 	}
 
-	log.Printf("SSO token refresh failed for %q, attempting re-login ...", profileName)
+	return creds, err
+}
 
-	cmd := exec.Command("aws", "sso", "login", "--profile", string(profileName))
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+func isErrSSOCreateToken(err error) bool {
+	var opErr *smithy.OperationError
 
-	return cmd.Run()
+	ret := errors.As(err, &opErr) && opErr.Operation() == ssooidcCreateTokenOp && opErr.Service() == ssooidc.ServiceID
+	if ret {
+		log.Printf("Retrying after SSO token creation error: %s", err.Error())
+	}
+
+	return ret
+}
+
+func isErrSSOCachedTokenFile(err error) bool {
+	ret := errors.Is(err, fs.ErrNotExist) && strings.Contains(err.Error(), "failed to read cached SSO token file")
+	if ret {
+		log.Printf("Retrying after failing to read cached SSO token file: %s", err.Error())
+	}
+
+	return ret
 }
 
 func createMFAProvider(o *stscreds.AssumeRoleOptions, profileName Name) func() (string, error) {
