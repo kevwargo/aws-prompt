@@ -158,7 +158,7 @@ func (s *server) run() error {
 
 	var caughtSignal os.Signal
 	go func() {
-		c := make(chan os.Signal)
+		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		caughtSignal = <-c
 		listener.Close()
