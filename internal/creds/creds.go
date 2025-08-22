@@ -11,56 +11,41 @@ import (
 )
 
 func Get(name profile.Name) (creds aws.Credentials, err error) {
-	cache.WithCache(func(c cache.Cache) error {
-		var cached *aws.Credentials
-		cached, err = c.Get(name)
-		if err != nil {
-			return err
-		}
+	cached, err := cache.Default.Get(name)
+	if err != nil {
+		return aws.Credentials{}, err
+	}
 
-		if cached != nil {
-			creds = *cached
-			return nil
-		}
+	if cached != nil {
+		return *cached, nil
+	}
 
-		creds, err = profile.Resolve(name)
-		if err != nil {
-			return err
-		}
+	creds, err = profile.Resolve(name)
+	if err != nil {
+		return creds, err
+	}
 
-		return c.Store(cache.StoreRequest{
-			Profile: name,
-			Creds:   creds,
-		})
-	})
+	err = cache.Default.Store(name, creds)
+	if err != nil {
+		return aws.Credentials{}, err
+	}
 
-	return
+	return creds, nil
 }
 
 func Describe(accessKeyID string) (info awskey.Info, err error) {
-	cache.WithCache(func(c cache.Cache) error {
-		info, err = c.Info(accessKeyID)
-		return err
-	})
-
-	return
+	return cache.Default.Info(accessKeyID)
 }
 
 func Refresh(accessKeyID string) (creds aws.Credentials, err error) {
-	cache.WithCache(func(c cache.Cache) error {
-		var info awskey.Info
-		info, err = c.Info(accessKeyID)
-		if err != nil {
-			return err
-		}
+	info, err := cache.Default.Info(accessKeyID)
+	if err != nil {
+		return aws.Credentials{}, err
+	}
 
-		if info.Profile == "" || info.Profile.IsPseudo() {
-			return errors.New("Current credentials cannot be refreshed")
-		}
+	if info.Profile == "" || info.Profile.IsPseudo() {
+		return aws.Credentials{}, errors.New("Current credentials cannot be refreshed")
+	}
 
-		creds, err = Get(info.Profile)
-		return err
-	})
-
-	return
+	return Get(info.Profile)
 }

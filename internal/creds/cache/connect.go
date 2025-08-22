@@ -8,63 +8,33 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-
-	"kevwargo/aws-prompt/internal/awskey"
-	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
-type client struct {
-	*rpc.Client
-}
-
-func (c *client) Get(name profile.Name) (*aws.Credentials, error) {
-	var resp GetResp
-	if err := c.Call(serverName+".Get", name, &resp); err != nil {
-		return nil, err
+func (c *Cache) connect() (err error) {
+	if c.client != nil {
+		return nil
 	}
 
-	return resp.Creds, nil
-}
-
-func (c *client) Store(req StoreRequest) error {
-	var resp struct{}
-
-	return c.Call(serverName+".Store", req, &resp)
-}
-
-func (c *client) Info(accessKeyID string) (info awskey.Info, err error) {
-	err = c.Call(serverName+".Info", accessKeyID, &info)
-	return
-}
-
-func (c *client) List() (profiles []string, err error) {
-	err = c.Call(serverName+".List", struct{}{}, &profiles)
-	return
-}
-
-func connect() (*client, error) {
-	c, err := rpc.Dial("unix", socketPath)
+	c.client, err = rpc.Dial("unix", socketPath)
 	if err == nil {
-		return &client{c}, nil
+		return nil
 	}
 
-	if err := handleConnectError(err); err != nil {
-		return nil, err
+	if err = handleConnectError(err); err != nil {
+		return err
 	}
-	if err := startServer(); err != nil {
-		return nil, err
+	if err = startServer(); err != nil {
+		return err
 	}
 
 	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
-		c, err = rpc.Dial("unix", socketPath)
+		c.client, err = rpc.Dial("unix", socketPath)
 		if err == nil {
-			return &client{c}, nil
+			return nil
 		}
 	}
 
-	return nil, err
+	return err
 }
 
 func startServer() error {

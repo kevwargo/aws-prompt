@@ -107,24 +107,20 @@ func mapCredEnvs(creds aws.Credentials) map[string]string {
 
 var regexConfigProfile = regexp.MustCompile(`^\[profile +([^\]]+)\]`)
 
-func generateCompletions() (names []string, err error) {
-	cache.WithCache(func(c cache.Cache) error {
-		names, err = c.List()
-		if err != nil {
-			return err
+func generateCompletions() ([]string, error) {
+	names, err := cache.Default.List()
+	if err != nil {
+		return nil, err
+	}
+
+	if profiles := listProfiles(names); len(profiles) > 0 {
+		if len(names) > 0 {
+			names = append(names, "###")
 		}
+		names = append(names, profiles...)
+	}
 
-		if profiles := listProfiles(names); len(profiles) > 0 {
-			if len(names) > 0 {
-				names = append(names, "###")
-			}
-			names = append(names, profiles...)
-		}
-
-		return nil
-	})
-
-	return
+	return names, nil
 }
 
 func listProfiles(skipList []string) (profiles []string) {
