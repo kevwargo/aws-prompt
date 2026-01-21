@@ -33,24 +33,30 @@ func InitCommand(rootCmd *cobra.Command) {
 				MainCmd:            awsp.MainCmd.Name(),
 				RootCmd:            rootCmd.Name(),
 				PS1Cmd:             awsp.PS1Cmd.Name(),
-				SourceStart:        awsp.SourceStart,
 				SourcableCommands:  strings.Join(sourcableCommands, "|"),
 				CompletionCommands: fmt.Sprintf("%q|%q", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd),
+				PreserveStdoutEnv:  preserveStdoutEnv,
 			})
 		},
 	}
 
 	rootCmd.AddCommand(initCmd)
+
+	if os.Getenv(preserveStdoutEnv) == "1" {
+		rootCmd.SetOut(os.Stderr)
+	}
 }
 
 type tmplInput struct {
 	MainCmd            string
 	RootCmd            string
 	PS1Cmd             string
-	SourceStart        string
 	SourcableCommands  string
 	CompletionCommands string
+	PreserveStdoutEnv  string
 }
+
+const preserveStdoutEnv = "AWSP_PRESERVE_STDOUT"
 
 //go:embed init.sh
 var shellBody string

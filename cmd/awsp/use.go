@@ -75,8 +75,6 @@ func createResetCommand() *cobra.Command {
 		Aliases: []string{"x"},
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			fmt.Println(SourceStart)
-
 			for _, env := range []string{awsAccessKeyIDEnvVar, awsSecretAccessKeyEnvVar, awsSessionTokenEnvVar} {
 				fmt.Printf("unset %s\n", env)
 			}
@@ -104,8 +102,6 @@ func createProcessCommand() *cobra.Command {
 }
 
 func dumpCreds(creds aws.Credentials) {
-	fmt.Println(SourceStart)
-
 	for name, value := range mapCredEnvs(creds) {
 		fmt.Printf("export %s=%q\n", name, value)
 	}

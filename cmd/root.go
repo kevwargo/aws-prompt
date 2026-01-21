@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -37,9 +38,9 @@ func initBashCompletionCommand(rootCmd *cobra.Command) {
 		ValidArgs: []string{awsp.MainCmd.Name()},
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return rootCmd.GenBashCompletionV2(rootCmd.OutOrStdout(), false)
+				return rootCmd.GenBashCompletionV2(os.Stdout, false)
 			} else if args[0] == awsp.MainCmd.Name() {
-				return awsp.MainCmd.GenBashCompletionV2(awsp.MainCmd.OutOrStdout(), false)
+				return awsp.MainCmd.GenBashCompletionV2(os.Stdout, false)
 			}
 
 			return fmt.Errorf("cannot generate bash completion for standalone %q command", args[0])

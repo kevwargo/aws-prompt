@@ -2,21 +2,7 @@
 {
     case "$1" in
         {{.SourcableCommands}})
-            local -a payload
-            local -a source_lines
-            local line
-
-            mapfile payload < <({{.RootCmd}} {{.MainCmd}} "$@")
-
-            for line in "${payload[@]}"; do
-                if [ ${#source_lines[@]} -gt 0 -o "$line" = $'{{.SourceStart}}\n' ]; then
-                    source_lines+=("$line")
-                else
-                    echo -n "$line"
-                fi
-            done
-
-            . <(for line in "${source_lines[@]}"; do echo -n "$line"; done)
+            . <({{.PreserveStdoutEnv}}=1 {{.RootCmd}} {{.MainCmd}} "$@")
             ;;
         {{.CompletionCommands}})
             local compcmd

@@ -21,8 +21,6 @@ func createMainCommand() *cobra.Command {
 }
 
 const (
-	SourceStart = "### * aws-prompt awsp source start * ###"
-
 	awsRegionEnvVar          = "AWS_DEFAULT_REGION"
 	awsAccessKeyIDEnvVar     = "AWS_ACCESS_KEY_ID"
 	awsSecretAccessKeyEnvVar = "AWS_SECRET_ACCESS_KEY"
