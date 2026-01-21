@@ -10,14 +10,16 @@ import (
 	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
-func Get(name profile.Name) (creds aws.Credentials, err error) {
-	cached, err := cache.Default.Get(name)
-	if err != nil {
-		return aws.Credentials{}, err
-	}
+func Get(name profile.Name, noCache bool) (creds aws.Credentials, err error) {
+	if !noCache {
+		cached, err := cache.Default.Get(name)
+		if err != nil {
+			return aws.Credentials{}, err
+		}
 
-	if cached != nil {
-		return *cached, nil
+		if cached != nil {
+			return *cached, nil
+		}
 	}
 
 	creds, err = profile.Resolve(name)
@@ -37,7 +39,7 @@ func Describe(accessKeyID string) (info awskey.Info, err error) {
 	return cache.Default.Info(accessKeyID)
 }
 
-func Refresh(accessKeyID string) (creds aws.Credentials, err error) {
+func Refresh(accessKeyID string, noCache bool) (creds aws.Credentials, err error) {
 	info, err := cache.Default.Info(accessKeyID)
 	if err != nil {
 		return aws.Credentials{}, err
@@ -47,5 +49,5 @@ func Refresh(accessKeyID string) (creds aws.Credentials, err error) {
 		return aws.Credentials{}, errors.New("Current credentials cannot be refreshed")
 	}
 
-	return Get(info.Profile)
+	return Get(info.Profile, noCache)
 }

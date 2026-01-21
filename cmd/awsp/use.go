@@ -16,77 +16,91 @@ import (
 	"kevwargo/aws-prompt/internal/creds/profile"
 )
 
-var UseCmd = &cobra.Command{
-	Use:     useName,
-	Aliases: []string{"u"},
-	Args:    cobra.ExactArgs(1),
-	RunE: func(_ *cobra.Command, args []string) error {
-		c, err := creds.Get(profile.Name(args[0]))
-		if err != nil {
-			return err
-		}
+func createUseCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:     useName,
+		Aliases: []string{"u"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := creds.Get(profile.Name(args[0]), false)
+			if err != nil {
+				return err
+			}
 
-		dumpCreds(c)
-		return nil
-	},
-	ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		names, err := generateCompletions()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		return names, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveKeepOrder
-	},
-}
-
-var RefreshCmd = &cobra.Command{
-	Use:     refreshName,
-	Aliases: []string{"f"},
-	Args:    cobra.NoArgs,
-	RunE: func(_ *cobra.Command, _ []string) error {
-		accessKeyID := os.Getenv(awsAccessKeyIDEnvVar)
-		if accessKeyID == "" {
+			dumpCreds(c)
 			return nil
-		}
+		},
+		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			names, err := generateCompletions()
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
 
-		c, err := creds.Refresh(accessKeyID)
-		if err != nil {
-			return err
-		}
-
-		dumpCreds(c)
-		return nil
-	},
+			return names, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveKeepOrder
+		},
+	}
 }
 
-var ResetCmd = &cobra.Command{
-	Use:     resetName,
-	Aliases: []string{"x"},
-	Args:    cobra.NoArgs,
-	RunE: func(_ *cobra.Command, _ []string) error {
-		fmt.Println(SourceStart)
+func createRefreshCommand() *cobra.Command {
+	var force bool
 
-		for _, env := range []string{awsAccessKeyIDEnvVar, awsSecretAccessKeyEnvVar, awsSessionTokenEnvVar} {
-			fmt.Printf("unset %s\n", env)
-		}
+	cmd := &cobra.Command{
+		Use:     refreshName,
+		Aliases: []string{"f"},
+		Args:    cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			accessKeyID := os.Getenv(awsAccessKeyIDEnvVar)
+			if accessKeyID == "" {
+				return nil
+			}
 
-		return nil
-	},
+			c, err := creds.Refresh(accessKeyID, force)
+			if err != nil {
+				return err
+			}
+
+			dumpCreds(c)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force refresh the creds (don't use cached ones)")
+
+	return cmd
 }
 
-var ProcessCmd = &cobra.Command{
-	Use:     processName,
-	Aliases: []string{"p"},
-	Args:    cobra.MinimumNArgs(1),
-	RunE: func(_ *cobra.Command, args []string) error {
-		c, err := creds.ResolveProcess(args[0], args[1:])
-		if err != nil {
-			return err
-		}
+func createResetCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:     resetName,
+		Aliases: []string{"x"},
+		Args:    cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			fmt.Println(SourceStart)
 
-		dumpCreds(c)
-		return nil
-	},
+			for _, env := range []string{awsAccessKeyIDEnvVar, awsSecretAccessKeyEnvVar, awsSessionTokenEnvVar} {
+				fmt.Printf("unset %s\n", env)
+			}
+
+			return nil
+		},
+	}
+}
+
+func createProcessCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:     processName,
+		Aliases: []string{"p"},
+		Args:    cobra.MinimumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			c, err := creds.ResolveProcess(args[0], args[1:])
+			if err != nil {
+				return err
+			}
+
+			dumpCreds(c)
+			return nil
+		},
+	}
 }
 
 func dumpCreds(creds aws.Credentials) {

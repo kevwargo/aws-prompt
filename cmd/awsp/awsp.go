@@ -4,16 +4,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var MainCmd = &cobra.Command{
-	Use: "awsp",
-}
+var MainCmd = createMainCommand()
 
-func init() {
-	MainCmd.AddCommand(PS1Cmd)
-	MainCmd.AddCommand(UseCmd)
-	MainCmd.AddCommand(RefreshCmd)
-	MainCmd.AddCommand(ProcessCmd)
-	MainCmd.AddCommand(ResetCmd)
+func createMainCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use: "awsp",
+	}
+
+	cmd.AddCommand(PS1Cmd)
+	cmd.AddCommand(createUseCommand())
+	cmd.AddCommand(createRefreshCommand())
+	cmd.AddCommand(createResetCommand())
+	cmd.AddCommand(createProcessCommand())
+
+	return cmd
 }
 
 const (

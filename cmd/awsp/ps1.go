@@ -13,23 +13,27 @@ import (
 	"kevwargo/aws-prompt/internal/creds"
 )
 
-var PS1Cmd = &cobra.Command{
-	Use:    ps1Name,
-	Hidden: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		tmpl, err := template.New(ps1Name).Parse(ps1Body)
-		if err != nil {
+var PS1Cmd = createPS1Command()
+
+func createPS1Command() *cobra.Command {
+	return &cobra.Command{
+		Use:    ps1Name,
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			tmpl, err := template.New(ps1Name).Parse(ps1Body)
+			if err != nil {
+				return err
+			}
+
+			data, err := describeActiveCreds()
+			if data != "" {
+				fmt.Println(SourceStart)
+				return tmpl.Execute(os.Stdout, data)
+			}
+
 			return err
-		}
-
-		data, err := describeActiveCreds()
-		if data != "" {
-			fmt.Println(SourceStart)
-			return tmpl.Execute(os.Stdout, data)
-		}
-
-		return err
-	},
+		},
+	}
 }
 
 func describeActiveCreds() (string, error) {
