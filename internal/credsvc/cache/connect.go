@@ -43,7 +43,7 @@ func startServer() error {
 		rootExec = os.Args[0]
 	}
 
-	lf, err := os.OpenFile(logFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	lf, err := os.OpenFile(logFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 	if err != nil {
 		return fmt.Errorf("opening log file %s: %w", logFile, err)
 	}

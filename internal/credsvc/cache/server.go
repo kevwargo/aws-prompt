@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/internal/awskey"
-	"kevwargo/aws-prompt/internal/creds/profile"
+	"kevwargo/aws-prompt/internal/credsvc/profile"
 )
 
 var RunServerCmd = &cobra.Command{

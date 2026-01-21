@@ -1,4 +1,4 @@
-package creds
+package credsvc
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials/processcreds"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
-	"kevwargo/aws-prompt/internal/creds/cache"
-	"kevwargo/aws-prompt/internal/creds/profile"
+	"kevwargo/aws-prompt/internal/credsvc/cache"
+	"kevwargo/aws-prompt/internal/credsvc/profile"
 )
 
 func ResolveProcess(name string, args []string) (aws.Credentials, error) {

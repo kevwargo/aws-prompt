@@ -11,7 +11,6 @@ func createMainCommand() *cobra.Command {
 		Use: "awsp",
 	}
 
-	cmd.AddCommand(PS1Cmd)
 	cmd.AddCommand(createUseCommand())
 	cmd.AddCommand(createRefreshCommand())
 	cmd.AddCommand(createResetCommand())
@@ -19,10 +18,3 @@ func createMainCommand() *cobra.Command {
 
 	return cmd
 }
-
-const (
-	awsRegionEnvVar          = "AWS_DEFAULT_REGION"
-	awsAccessKeyIDEnvVar     = "AWS_ACCESS_KEY_ID"
-	awsSecretAccessKeyEnvVar = "AWS_SECRET_ACCESS_KEY"
-	awsSessionTokenEnvVar    = "AWS_SESSION_TOKEN"
-)

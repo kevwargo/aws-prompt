@@ -7,9 +7,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/spf13/cobra"
 
-	"kevwargo/aws-prompt/internal/creds"
-	"kevwargo/aws-prompt/internal/creds/cache"
-	"kevwargo/aws-prompt/internal/creds/profile"
+	"kevwargo/aws-prompt/internal/credsvc"
+	"kevwargo/aws-prompt/internal/credsvc/cache"
+	"kevwargo/aws-prompt/internal/credsvc/profile"
 )
 
 func createUseCommand() *cobra.Command {
@@ -18,12 +18,12 @@ func createUseCommand() *cobra.Command {
 		Aliases: []string{"u"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			c, err := creds.Get(profile.Name(args[0]), false)
+			creds, err := credsvc.Get(profile.Name(args[0]), false)
 			if err != nil {
 				return err
 			}
 
-			dumpCreds(c)
+			dumpCreds(creds)
 			return nil
 		},
 		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
@@ -45,17 +45,17 @@ func createRefreshCommand() *cobra.Command {
 		Aliases: []string{"f"},
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			accessKeyID := os.Getenv(awsAccessKeyIDEnvVar)
+			accessKeyID := os.Getenv(credsvc.EnvAWSAccessKeyID)
 			if accessKeyID == "" {
 				return nil
 			}
 
-			c, err := creds.Refresh(accessKeyID, force)
+			creds, err := credsvc.Refresh(accessKeyID, force)
 			if err != nil {
 				return err
 			}
 
-			dumpCreds(c)
+			dumpCreds(creds)
 			return nil
 		},
 	}
@@ -71,7 +71,7 @@ func createResetCommand() *cobra.Command {
 		Aliases: []string{"x"},
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			for _, env := range []string{awsAccessKeyIDEnvVar, awsSecretAccessKeyEnvVar, awsSessionTokenEnvVar} {
+			for _, env := range credsvc.Envs {
 				fmt.Printf("unset %s\n", env)
 			}
 
@@ -86,28 +86,20 @@ func createProcessCommand() *cobra.Command {
 		Aliases: []string{"p"},
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			c, err := creds.ResolveProcess(args[0], args[1:])
+			creds, err := credsvc.ResolveProcess(args[0], args[1:])
 			if err != nil {
 				return err
 			}
 
-			dumpCreds(c)
+			dumpCreds(creds)
 			return nil
 		},
 	}
 }
 
 func dumpCreds(creds aws.Credentials) {
-	for name, value := range mapCredEnvs(creds) {
+	for name, value := range credsvc.Map(creds) {
 		fmt.Printf("export %s=%q\n", name, value)
-	}
-}
-
-func mapCredEnvs(creds aws.Credentials) map[string]string {
-	return map[string]string{
-		awsAccessKeyIDEnvVar:     creds.AccessKeyID,
-		awsSecretAccessKeyEnvVar: creds.SecretAccessKey,
-		awsSessionTokenEnvVar:    creds.SessionToken,
 	}
 }
 

@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 
 	"kevwargo/aws-prompt/internal/awskey"
-	"kevwargo/aws-prompt/internal/creds/profile"
+	"kevwargo/aws-prompt/internal/credsvc/profile"
 )
 
 // Credentials cache, which automatically connects to the Unix socket

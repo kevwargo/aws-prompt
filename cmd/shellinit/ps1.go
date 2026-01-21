@@ -1,4 +1,4 @@
-package awsp
+package shellinit
 
 import (
 	_ "embed"
@@ -10,38 +10,31 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"kevwargo/aws-prompt/internal/creds"
+	"kevwargo/aws-prompt/internal/credsvc"
+	"kevwargo/aws-prompt/internal/regions"
 )
 
-var PS1Cmd = createPS1Command()
-
-func createPS1Command() *cobra.Command {
-	return &cobra.Command{
-		Use:    ps1Name,
-		Hidden: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			tmpl, err := template.New(ps1Name).Parse(ps1Body)
-			if err != nil {
-				return err
-			}
-
-			data, err := describeActiveCreds()
-			if data != "" {
-				return tmpl.Execute(os.Stdout, data)
-			}
-
-			return err
-		},
+func runPS1(cmd *cobra.Command, args []string) error {
+	tmpl, err := template.New(ps1Name).Parse(ps1Body)
+	if err != nil {
+		return err
 	}
+
+	data, err := describeActiveCreds()
+	if data != "" {
+		return tmpl.Execute(os.Stdout, data)
+	}
+
+	return err
 }
 
 func describeActiveCreds() (string, error) {
-	accessKeyID := os.Getenv(awsAccessKeyIDEnvVar)
+	accessKeyID := os.Getenv(credsvc.EnvAWSAccessKeyID)
 	if accessKeyID == "" {
 		return "", nil
 	}
 
-	info, err := creds.Describe(accessKeyID)
+	info, err := credsvc.Describe(accessKeyID)
 	if err != nil {
 		return "", err
 	}
@@ -51,8 +44,8 @@ func describeActiveCreds() (string, error) {
 		label = string(info.Profile)
 	}
 
-	if region := os.Getenv(awsRegionEnvVar); region != "" {
-		label += ":" + shortenRegion(region)
+	if region := os.Getenv(credsvc.EnvAWSRegion); region != "" {
+		label += ":" + regions.Shorten(region)
 	}
 
 	return fmt.Sprintf("{%s (%s)}", colorize(label, colorPurple), formatExpiration(info.Expiration)), nil

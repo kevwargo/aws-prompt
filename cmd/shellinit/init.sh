@@ -16,9 +16,14 @@
     esac
 }
 
+_awsp_ps1()
+{
+    . <({{.PreserveStdoutEnv}}=1 {{.RootCmd}} {{.PS1Cmd}})
+}
+
 . <({{.RootCmd}} bash-completion)
 . <({{.RootCmd}} bash-completion {{.MainCmd}})
 
-if [[ "${PROMPT_COMMAND}" != *"{{.MainCmd}} {{.PS1Cmd}}"* ]]; then
-    PROMPT_COMMAND+=' ; {{.MainCmd}} {{.PS1Cmd}}'
+if [[ "${PROMPT_COMMAND}" != *"_awsp_ps1"* ]]; then
+    PROMPT_COMMAND+=' ; _awsp_ps1'
 fi

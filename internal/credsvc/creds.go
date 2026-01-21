@@ -1,4 +1,4 @@
-package creds
+package credsvc
 
 import (
 	"errors"
@@ -6,9 +6,22 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"kevwargo/aws-prompt/internal/awskey"
-	"kevwargo/aws-prompt/internal/creds/cache"
-	"kevwargo/aws-prompt/internal/creds/profile"
+	"kevwargo/aws-prompt/internal/credsvc/cache"
+	"kevwargo/aws-prompt/internal/credsvc/profile"
 )
+
+const (
+	EnvAWSRegion          = "AWS_DEFAULT_REGION"
+	EnvAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
+	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
+	EnvAWSSessionToken    = "AWS_SESSION_TOKEN"
+)
+
+var Envs = []string{
+	EnvAWSAccessKeyID,
+	EnvAWSSecretAccessKey,
+	EnvAWSSessionToken,
+}
 
 func Get(name profile.Name, noCache bool) (creds aws.Credentials, err error) {
 	if !noCache {
@@ -50,4 +63,12 @@ func Refresh(accessKeyID string, noCache bool) (creds aws.Credentials, err error
 	}
 
 	return Get(info.Profile, noCache)
+}
+
+func Map(creds aws.Credentials) map[string]string {
+	return map[string]string{
+		EnvAWSAccessKeyID:     creds.AccessKeyID,
+		EnvAWSSecretAccessKey: creds.SecretAccessKey,
+		EnvAWSSessionToken:    creds.SessionToken,
+	}
 }

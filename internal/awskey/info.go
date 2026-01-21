@@ -3,7 +3,7 @@ package awskey
 import (
 	"time"
 
-	"kevwargo/aws-prompt/internal/creds/profile"
+	"kevwargo/aws-prompt/internal/credsvc/profile"
 )
 
 type Info struct {
