@@ -1,12 +1,17 @@
 package cache
 
 import (
+	"bufio"
+	"iter"
 	"log"
 	"net/rpc"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 
 	"kevwargo/aws-prompt/internal/awskey"
 	"kevwargo/aws-prompt/internal/creds/profile"
@@ -64,19 +69,61 @@ func (c *Cache) Info(accessKeyID string) (info awskey.Info, err error) {
 	return
 }
 
-func (c *Cache) List() (profiles []string, err error) {
-	if err = c.connect(); err != nil {
-		return nil, err
+func (c *Cache) List() (profile.List, error) {
+	if err := c.connect(); err != nil {
+		return profile.List{}, err
 	}
 
-	err = c.client.Call(serverName+".List", struct{}{}, &profiles)
+	var list profile.List
+	if err := c.client.Call(serverName+".List", struct{}{}, &list.Active); err != nil {
+		return profile.List{}, err
+	}
 
-	return
+	for _, f := range config.DefaultSharedConfigFiles {
+		for p, err := range readProfiles(f) {
+			if err != nil {
+				return profile.List{}, err
+			}
+
+			if !slices.Contains(list.Active, p) {
+				list.Inactive = append(list.Inactive, p)
+			}
+		}
+	}
+
+	list.Sort()
+
+	return list, nil
+}
+
+func readProfiles(filename string) iter.Seq2[profile.Name, error] {
+	return func(yield func(profile.Name, error) bool) {
+		f, err := os.Open(filename)
+		if err != nil {
+			yield("", err)
+			return
+		}
+		defer f.Close()
+
+		s := bufio.NewScanner(f)
+		for s.Scan() {
+			if m := regexConfigProfile.FindStringSubmatch(s.Text()); m != nil {
+				if !yield(profile.Name(m[1]), nil) {
+					return
+				}
+			}
+		}
+		if err := s.Err(); err != nil {
+			yield("", err)
+		}
+	}
 }
 
 var (
 	socketPath string
 	logFile    string
+
+	regexConfigProfile = regexp.MustCompile(`^\[profile +([^\]]+)\]`)
 )
 
 func init() {

@@ -3,12 +3,8 @@ package awsp
 import (
 	"fmt"
 	"os"
-	"regexp"
-	"slices"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/internal/creds"
@@ -115,45 +111,24 @@ func mapCredEnvs(creds aws.Credentials) map[string]string {
 	}
 }
 
-var regexConfigProfile = regexp.MustCompile(`^\[profile +([^\]]+)\]`)
-
 func generateCompletions() ([]string, error) {
-	names, err := cache.Default.List()
+	profiles, err := cache.Default.List()
 	if err != nil {
 		return nil, err
 	}
 
-	if profiles := listProfiles(names); len(profiles) > 0 {
-		if len(names) > 0 {
-			names = append(names, "###")
+	comps := make([]string, 0, len(profiles.Active)+len(profiles.Inactive))
+	if len(profiles.Active) > 0 {
+		for _, p := range profiles.Active {
+			comps = append(comps, string(p))
 		}
-		names = append(names, profiles...)
+		comps = append(comps, "###")
+	}
+	for _, p := range profiles.Inactive {
+		comps = append(comps, string(p))
 	}
 
-	return names, nil
-}
-
-func listProfiles(skipList []string) (profiles []string) {
-	for _, f := range config.DefaultSharedConfigFiles {
-		b, err := os.ReadFile(f)
-		if err != nil {
-			continue
-		}
-
-		for _, line := range strings.Split(string(b), "\n") {
-			m := regexConfigProfile.FindStringSubmatch(line)
-			if len(m) > 1 {
-				profile := m[1]
-				if !slices.Contains(skipList, profile) {
-					profiles = append(profiles, profile)
-				}
-			}
-		}
-	}
-
-	slices.Sort(profiles)
-
-	return
+	return comps, nil
 }
 
 const (

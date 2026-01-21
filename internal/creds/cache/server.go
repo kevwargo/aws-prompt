@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"log"
@@ -9,7 +8,6 @@ import (
 	"net/rpc"
 	"os"
 	"os/signal"
-	"slices"
 	"sync"
 	"syscall"
 
@@ -93,16 +91,10 @@ func (s *server) List(req struct{}, resp *[]profile.Name) error {
 	for p, creds := range s.profileCreds {
 		if !creds.Expired() {
 			*resp = append(*resp, p)
+		} else {
+			delete(s.profileCreds, p)
 		}
 	}
-
-	slices.SortFunc(*resp, func(a, b profile.Name) int {
-		if a.IsPseudo() != b.IsPseudo() {
-			// sort pseudo-profiles after the normal ones
-			return -cmp.Compare(a, b)
-		}
-		return cmp.Compare(a, b)
-	})
 
 	return nil
 }
@@ -157,9 +149,9 @@ func (s *server) run() error {
 	}
 
 	var caughtSignal os.Signal
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		caughtSignal = <-c
 		listener.Close()
 	}()
