@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -38,14 +37,6 @@ var Defaults = []Region{
 	{Name: "us-east-2", LongName: "US East (Ohio)"},
 	{Name: "us-west-1", LongName: "US West (N. California)"},
 	{Name: "us-west-2", LongName: "US West (Oregon)"},
-}
-
-func Shorten(region string) string {
-	for _, d := range directions {
-		region = strings.ReplaceAll(region, d, d[:1])
-	}
-
-	return strings.ReplaceAll(region, "-", "")
 }
 
 type Resolver struct {
@@ -170,5 +161,3 @@ func (s *ssmResolver) collect() ([]Region, error) {
 
 	return regions, errors.Join(errs...)
 }
-
-var directions = []string{"north", "south", "east", "west", "central"}

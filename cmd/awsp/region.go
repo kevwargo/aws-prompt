@@ -17,7 +17,7 @@ func createRegionCommand() *cobra.Command {
 		Aliases: []string{"r"},
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("export %s=%q\n", credsvc.EnvAWSRegion, args[0])
+			fmt.Printf("export %s=%q\n", credsvc.EnvAWSRegion, regionsvc.Expand(args[0]))
 		},
 		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {
