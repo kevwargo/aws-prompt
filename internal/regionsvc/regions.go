@@ -3,6 +3,7 @@ package regionsvc
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"slices"
@@ -49,7 +50,7 @@ func Shorten(region string) string {
 
 type Resolver struct {
 	nameCache  map[string]string
-	cacheMutex sync.Mutex
+	cacheMutex sync.RWMutex
 }
 
 func NewResolver() *Resolver {
@@ -73,43 +74,101 @@ func (r *Resolver) List(ctx context.Context, awscfg aws.Config) ([]Region, error
 	log.Printf("ec2:DescribeRegions = %d regions", len(regionsResp.Regions))
 
 	var (
-		ssmClient *ssm.Client
-		regions   []Region
+		regions []Region
+		ssmRes  *ssmResolver
 	)
-
-	r.cacheMutex.Lock()
-	defer r.cacheMutex.Unlock()
 
 	for _, region := range regionsResp.Regions {
 		name := *region.RegionName
 
-		if longName, ok := r.nameCache[name]; ok {
+		if longName := r.getCached(name); longName != "" {
 			regions = append(regions, Region{Name: name, LongName: longName})
 			log.Printf("found in cache %s -> %q", name, longName)
 			continue
 		}
 
-		if ssmClient == nil {
-			ssmClient = ssm.NewFromConfig(awscfg)
+		if ssmRes == nil {
+			ssmRes = &ssmResolver{client: ssm.NewFromConfig(awscfg)}
 		}
+		ssmRes.start(ctx, name)
+	}
 
+	resolved, err := ssmRes.collect()
+	if err != nil {
+		return nil, err
+	}
+
+	regions = append(regions, resolved...)
+	slices.SortFunc(regions, func(a, b Region) int { return cmp.Compare(a.Name, b.Name) })
+
+	r.cacheMutex.Lock()
+	defer r.cacheMutex.Unlock()
+
+	for _, reg := range resolved {
+		r.nameCache[reg.Name] = reg.LongName
+	}
+
+	return regions, nil
+}
+
+func (r *Resolver) getCached(name string) string {
+	r.cacheMutex.RLock()
+	defer r.cacheMutex.RUnlock()
+
+	return r.nameCache[name]
+}
+
+type ssmResolver struct {
+	client *ssm.Client
+	count  int
+	respC  chan Region
+	errC   chan error
+}
+
+func (s *ssmResolver) start(ctx context.Context, name string) {
+	if s.respC == nil {
+		s.respC = make(chan Region, 10)
+	}
+	if s.errC == nil {
+		s.errC = make(chan error, 10)
+	}
+
+	go func() {
 		log.Printf("resolving long name of %s", name)
-		paramResp, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{
+		paramResp, err := s.client.GetParameter(ctx, &ssm.GetParameterInput{
 			Name: aws.String(fmt.Sprintf("/aws/service/global-infrastructure/regions/%s/longName", name)),
 		})
 		if err != nil {
-			return nil, err
+			s.errC <- err
+		} else {
+			longName := *paramResp.Parameter.Value
+			log.Printf("resolved %s -> %q", name, longName)
+			s.respC <- Region{
+				Name:     name,
+				LongName: longName,
+			}
 		}
+	}()
 
-		longName := *paramResp.Parameter.Value
-		log.Printf("resolved %s -> %q", name, longName)
-		r.nameCache[name] = longName
-		regions = append(regions, Region{Name: name, LongName: longName})
+	s.count++
+}
+
+func (s *ssmResolver) collect() ([]Region, error) {
+	var (
+		regions []Region
+		errs    []error
+	)
+
+	for ; s.count > 0; s.count-- {
+		select {
+		case err := <-s.errC:
+			errs = append(errs, err)
+		case resp := <-s.respC:
+			regions = append(regions, resp)
+		}
 	}
 
-	slices.SortFunc(regions, func(a, b Region) int { return cmp.Compare(a.Name, b.Name) })
-
-	return regions, nil
+	return regions, errors.Join(errs...)
 }
 
 var directions = []string{"north", "south", "east", "west", "central"}
