@@ -71,9 +71,9 @@ func runInit(_ *cobra.Command, _ []string) error {
 
 func runCompletion(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		return cmd.Root().GenBashCompletionV2(os.Stdout, false)
+		return cmd.Root().GenBashCompletionV2(os.Stdout, true)
 	} else if args[0] == awsp.MainCmd.Name() {
-		return awsp.MainCmd.GenBashCompletionV2(os.Stdout, false)
+		return awsp.MainCmd.GenBashCompletionV2(os.Stdout, true)
 	}
 
 	return fmt.Errorf("cannot generate bash completion for standalone %q command", args[0])

@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/internal/credsvc"
-	"kevwargo/aws-prompt/internal/regions"
+	"kevwargo/aws-prompt/internal/regionsvc"
 )
 
 func runPS1(cmd *cobra.Command, args []string) error {
@@ -45,7 +45,7 @@ func describeActiveCreds() (string, error) {
 	}
 
 	if region := os.Getenv(credsvc.EnvAWSRegion); region != "" {
-		label += ":" + regions.Shorten(region)
+		label += ":" + regionsvc.Shorten(region)
 	}
 
 	return fmt.Sprintf("{%s (%s)}", colorize(label, colorPurple), formatExpiration(info.Expiration)), nil

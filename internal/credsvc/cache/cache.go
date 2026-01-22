@@ -15,6 +15,7 @@ import (
 
 	"kevwargo/aws-prompt/internal/awskey"
 	"kevwargo/aws-prompt/internal/credsvc/profile"
+	"kevwargo/aws-prompt/internal/regionsvc"
 )
 
 // Credentials cache, which automatically connects to the Unix socket
@@ -31,6 +32,11 @@ type GetResp struct {
 type StoreRequest struct {
 	Profile profile.Name
 	Creds   aws.Credentials
+}
+
+type StoreRegionsRequest struct {
+	AccountID string
+	Regions   []regionsvc.Region
 }
 
 // The default instance of cache for convenience.
@@ -69,13 +75,13 @@ func (c *Cache) Info(accessKeyID string) (info awskey.Info, err error) {
 	return
 }
 
-func (c *Cache) List() (profile.List, error) {
+func (c *Cache) ListProfiles() (profile.List, error) {
 	if err := c.connect(); err != nil {
 		return profile.List{}, err
 	}
 
 	var list profile.List
-	if err := c.client.Call(serverName+".List", struct{}{}, &list.Active); err != nil {
+	if err := c.client.Call(serverName+".ListProfiles", struct{}{}, &list.Active); err != nil {
 		return profile.List{}, err
 	}
 
@@ -94,6 +100,14 @@ func (c *Cache) List() (profile.List, error) {
 	list.Sort()
 
 	return list, nil
+}
+
+func (c *Cache) ListRegions(accessKeyID string) (regions []regionsvc.Region, err error) {
+	if err = c.connect(); err == nil {
+		err = c.client.Call(serverName+".ListRegions", accessKeyID, &regions)
+	}
+
+	return regions, err
 }
 
 func readProfiles(filename string) iter.Seq2[profile.Name, error] {

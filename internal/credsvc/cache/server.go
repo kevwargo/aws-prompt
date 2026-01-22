@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -12,10 +13,12 @@ import (
 	"syscall"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/spf13/cobra"
 
 	"kevwargo/aws-prompt/internal/awskey"
 	"kevwargo/aws-prompt/internal/credsvc/profile"
+	"kevwargo/aws-prompt/internal/regionsvc"
 )
 
 var RunServerCmd = &cobra.Command{
@@ -23,8 +26,10 @@ var RunServerCmd = &cobra.Command{
 	Hidden: true,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		srv := server{
-			profileCreds:  make(map[profile.Name]aws.Credentials),
-			accessKeyInfo: make(map[string]awskey.Info),
+			profileCreds:    make(map[profile.Name]aws.Credentials),
+			accessKeyInfo:   make(map[string]awskey.Info),
+			accountRegions:  make(map[string][]regionsvc.Region),
+			regionsResolver: regionsvc.NewResolver(),
 		}
 
 		return srv.run()
@@ -35,25 +40,16 @@ type server struct {
 	profileCreds      map[profile.Name]aws.Credentials
 	profileCredsMutex sync.Mutex
 
+	accountRegions      map[string][]regionsvc.Region
+	accountRegionsMutex sync.Mutex
+	regionsResolver     *regionsvc.Resolver
+
 	accessKeyInfo      map[string]awskey.Info
-	accessKeyInfoMutex sync.Mutex
+	accessKeyInfoMutex sync.RWMutex
 }
 
 func (s *server) Get(name profile.Name, resp *GetResp) error {
-	s.profileCredsMutex.Lock()
-	defer s.profileCredsMutex.Unlock()
-
-	if creds, ok := s.profileCreds[name]; ok {
-		if !creds.Expired() {
-			resp.Creds = &creds
-			return nil
-		}
-
-		log.Printf("Removing creds for %q expired on %s", name, creds.Expires)
-		delete(s.profileCreds, name)
-	}
-
-	resp.Creds = nil
+	resp.Creds = s.getCreds(name)
 	return nil
 }
 
@@ -66,25 +62,13 @@ func (s *server) Store(req StoreRequest, resp *struct{}) error {
 	return nil
 }
 
-func (s *server) Info(accessKeyID string, resp *awskey.Info) error {
-	s.accessKeyInfoMutex.Lock()
-	defer s.accessKeyInfoMutex.Unlock()
+func (s *server) Info(accessKeyID string, resp *awskey.Info) (err error) {
+	*resp, err = s.getKeyInfo(accessKeyID)
 
-	if info, ok := s.accessKeyInfo[accessKeyID]; ok {
-		*resp = info
-	} else {
-		accountID, err := awskey.DecodeAccountID(accessKeyID)
-		if err != nil {
-			return err
-		}
-
-		*resp = awskey.Info{AccountID: accountID}
-	}
-
-	return nil
+	return err
 }
 
-func (s *server) List(req struct{}, resp *[]profile.Name) error {
+func (s *server) ListProfiles(req struct{}, resp *[]profile.Name) error {
 	s.profileCredsMutex.Lock()
 	defer s.profileCredsMutex.Unlock()
 
@@ -97,6 +81,82 @@ func (s *server) List(req struct{}, resp *[]profile.Name) error {
 	}
 
 	return nil
+}
+
+func (s *server) ListRegions(accessKeyID string, resp *[]regionsvc.Region) error {
+	s.accountRegionsMutex.Lock()
+	defer s.accountRegionsMutex.Unlock()
+
+	info, err := s.getKeyInfo(accessKeyID)
+	if err != nil {
+		return err
+	}
+
+	if regions, ok := s.accountRegions[info.AccountID]; ok {
+		*resp = regions
+		return nil
+	}
+
+	creds := s.getCreds(info.Profile)
+	if creds == nil {
+		// what?
+		return nil
+	}
+
+	ctx := context.Background()
+	awscfg, err := config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(
+		aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
+			return *creds, nil
+		}),
+	))
+	if err != nil {
+		return err
+	}
+
+	regions, err := s.regionsResolver.List(ctx, awscfg)
+	if err != nil {
+		return err
+	}
+
+	s.accountRegions[info.AccountID] = regions
+	*resp = regions
+
+	return nil
+}
+
+func (s *server) getCreds(name profile.Name) *aws.Credentials {
+	s.profileCredsMutex.Lock()
+	defer s.profileCredsMutex.Unlock()
+
+	creds, ok := s.profileCreds[name]
+	if !ok {
+		return nil
+	}
+
+	if !creds.Expired() {
+		return &creds
+	}
+
+	log.Printf("Removing creds for %q expired on %s", name, creds.Expires)
+	delete(s.profileCreds, name)
+
+	return nil
+}
+
+func (s *server) getKeyInfo(accessKeyID string) (awskey.Info, error) {
+	s.accessKeyInfoMutex.RLock()
+	defer s.accessKeyInfoMutex.RUnlock()
+
+	if info, ok := s.accessKeyInfo[accessKeyID]; ok {
+		return info, nil
+	}
+
+	accountID, err := awskey.DecodeAccountID(accessKeyID)
+	if err != nil {
+		return awskey.Info{}, err
+	}
+
+	return awskey.Info{AccountID: accountID}, nil
 }
 
 func (s *server) storeProfile(profile profile.Name, creds aws.Credentials) {

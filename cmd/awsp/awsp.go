@@ -11,10 +11,13 @@ func createMainCommand() *cobra.Command {
 		Use: "awsp",
 	}
 
-	cmd.AddCommand(createUseCommand())
-	cmd.AddCommand(createRefreshCommand())
-	cmd.AddCommand(createResetCommand())
-	cmd.AddCommand(createProcessCommand())
+	cmd.AddCommand(
+		createUseCommand(),
+		createRefreshCommand(),
+		createResetCommand(),
+		createProcessCommand(),
+		createRegionCommand(),
+	)
 
 	return cmd
 }

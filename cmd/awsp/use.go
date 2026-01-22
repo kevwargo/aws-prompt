@@ -27,7 +27,7 @@ func createUseCommand() *cobra.Command {
 			return nil
 		},
 		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-			names, err := generateCompletions()
+			names, err := generateProfileCompletions()
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
@@ -70,12 +70,10 @@ func createResetCommand() *cobra.Command {
 		Use:     resetName,
 		Aliases: []string{"x"},
 		Args:    cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		Run: func(_ *cobra.Command, _ []string) {
 			for _, env := range credsvc.Envs {
 				fmt.Printf("unset %s\n", env)
 			}
-
-			return nil
 		},
 	}
 }
@@ -103,8 +101,8 @@ func dumpCreds(creds aws.Credentials) {
 	}
 }
 
-func generateCompletions() ([]string, error) {
-	profiles, err := cache.Default.List()
+func generateProfileCompletions() ([]string, error) {
+	profiles, err := cache.Default.ListProfiles()
 	if err != nil {
 		return nil, err
 	}
