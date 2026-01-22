@@ -34,9 +34,9 @@ type StoreRequest struct {
 	Creds   aws.Credentials
 }
 
-type StoreRegionsRequest struct {
-	AccountID string
-	Regions   []regionsvc.Region
+type ListRegionsRequest struct {
+	AccessKeyID string
+	Region      string
 }
 
 // The default instance of cache for convenience.
@@ -102,9 +102,13 @@ func (c *Cache) ListProfiles() (profile.List, error) {
 	return list, nil
 }
 
-func (c *Cache) ListRegions(accessKeyID string) (regions []regionsvc.Region, err error) {
+func (c *Cache) ListRegions(req ListRegionsRequest) (regions []regionsvc.Region, err error) {
+	if req.AccessKeyID == "" || req.Region == "" {
+		return nil, nil
+	}
+
 	if err = c.connect(); err == nil {
-		err = c.client.Call(serverName+".ListRegions", accessKeyID, &regions)
+		err = c.client.Call(serverName+".ListRegions", req, &regions)
 	}
 
 	return regions, err

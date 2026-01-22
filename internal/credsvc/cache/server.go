@@ -83,11 +83,11 @@ func (s *server) ListProfiles(req struct{}, resp *[]profile.Name) error {
 	return nil
 }
 
-func (s *server) ListRegions(accessKeyID string, resp *[]regionsvc.Region) error {
+func (s *server) ListRegions(req ListRegionsRequest, resp *[]regionsvc.Region) error {
 	s.accountRegionsMutex.Lock()
 	defer s.accountRegionsMutex.Unlock()
 
-	info, err := s.getKeyInfo(accessKeyID)
+	info, err := s.getKeyInfo(req.AccessKeyID)
 	if err != nil {
 		return err
 	}
@@ -104,11 +104,14 @@ func (s *server) ListRegions(accessKeyID string, resp *[]regionsvc.Region) error
 	}
 
 	ctx := context.Background()
-	awscfg, err := config.LoadDefaultConfig(ctx, config.WithCredentialsProvider(
-		aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
-			return *creds, nil
-		}),
-	))
+	awscfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(req.Region),
+		config.WithCredentialsProvider(
+			aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
+				return *creds, nil
+			}),
+		),
+	)
 	if err != nil {
 		return err
 	}

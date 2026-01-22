@@ -34,13 +34,13 @@ func createRegionCommand() *cobra.Command {
 	}
 }
 
-func generateRegionCompletions() (comps []cobra.Completion, err error) {
-	var regions []regionsvc.Region
-	if accessKeyID := os.Getenv(credsvc.EnvAWSAccessKeyID); accessKeyID != "" {
-		regions, err = cache.Default.ListRegions(accessKeyID)
-		if err != nil {
-			return nil, err
-		}
+func generateRegionCompletions() (comps []cobra.Completion, _ error) {
+	regions, err := cache.Default.ListRegions(cache.ListRegionsRequest{
+		AccessKeyID: os.Getenv(credsvc.EnvAWSAccessKeyID),
+		Region:      os.Getenv(credsvc.EnvAWSRegion),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if len(regions) == 0 {
