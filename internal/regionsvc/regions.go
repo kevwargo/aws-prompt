@@ -84,20 +84,23 @@ func (r *Resolver) List(ctx context.Context, awscfg aws.Config) ([]Region, error
 		ssmRes.start(ctx, name)
 	}
 
-	resolved, err := ssmRes.collect()
-	if err != nil {
-		return nil, err
+	if ssmRes != nil {
+		resolved, err := ssmRes.collect()
+		if err != nil {
+			return nil, err
+		}
+
+		regions = append(regions, resolved...)
+
+		r.cacheMutex.Lock()
+		defer r.cacheMutex.Unlock()
+
+		for _, reg := range resolved {
+			r.nameCache[reg.Name] = reg.LongName
+		}
 	}
 
-	regions = append(regions, resolved...)
 	slices.SortFunc(regions, func(a, b Region) int { return cmp.Compare(a.Name, b.Name) })
-
-	r.cacheMutex.Lock()
-	defer r.cacheMutex.Unlock()
-
-	for _, reg := range resolved {
-		r.nameCache[reg.Name] = reg.LongName
-	}
 
 	return regions, nil
 }
