@@ -68,23 +68,25 @@ func retrieveCredsWithRetry(ctx context.Context, provider aws.CredentialsProvide
 }
 
 func isErrSSOCreateToken(err error) bool {
-	var opErr *smithy.OperationError
-
-	ret := errors.As(err, &opErr) && opErr.Operation() == ssooidcCreateTokenOp && opErr.Service() == ssooidc.ServiceID
-	if ret {
-		log.Printf("Retrying after SSO token creation error: %s", err.Error())
+	if opErr, ok := errors.AsType[*smithy.OperationError](err); ok {
+		if opErr.Operation() == ssooidcCreateTokenOp && opErr.Service() == ssooidc.ServiceID {
+			log.Printf("Retrying after SSO token creation error: %s", err.Error())
+			return true
+		}
 	}
 
-	return ret
+	return false
 }
 
 func isErrSSOCachedTokenFile(err error) bool {
-	ret := errors.Is(err, fs.ErrNotExist) && strings.Contains(err.Error(), "failed to read cached SSO token file")
-	if ret {
-		log.Printf("Retrying after failing to read cached SSO token file: %s", err.Error())
+	if errors.Is(err, fs.ErrNotExist) {
+		if strings.Contains(err.Error(), "failed to read cached SSO token file") {
+			log.Printf("Retrying after failing to read cached SSO token file: %s", err.Error())
+			return true
+		}
 	}
 
-	return ret
+	return false
 }
 
 func createMFAProvider(o *stscreds.AssumeRoleOptions, profileName Name) func() (string, error) {
