@@ -1,0 +1,1 @@
+- Rearrange cache storage (use a separate ~/.cache/awsp dir for logs, sockets and other cached stuff)
